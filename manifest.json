@@ -10,8 +10,10 @@
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
     "https://generativelanguage.googleapis.com/*"
   ],
+  "optional_host_permissions": [],
   "action": {
     "default_title": "AI Summary Settings",
     "default_popup": "popup.html"
@@ -21,7 +23,10 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/watch*"],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
       "js": ["content/index.js"],
       "type": "module",
       "run_at": "document_idle"

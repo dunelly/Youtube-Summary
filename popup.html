@@ -32,6 +32,9 @@
         gap: 8px;
         font-weight: 500;
       }
+      label.disabled {
+        opacity: 0.6;
+      }
       .select-row {
         justify-content: space-between;
       }
@@ -63,6 +66,18 @@
         border-color: rgba(62, 166, 255, 0.5);
         background: rgba(62, 166, 255, 0.08);
       }
+      textarea {
+        width: 100%;
+        min-height: 80px;
+        resize: vertical;
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(128, 128, 128, 0.4);
+        font: inherit;
+      }
+      .custom-prompt {
+        margin-top: 8px;
+      }
       p {
         margin: 8px 0 0;
         font-size: 12px;
@@ -89,6 +104,29 @@
         <option value="gemini">Gemini</option>
         <option value="gpt">GPT (OpenAI)</option>
         <option value="claude">Claude (Anthropic)</option>
+      </select>
+    </label>
+
+    <label class="select-row">
+      <span>Summary style</span>
+      <select id="summaryMode">
+        <option value="simple">Simple bullets</option>
+        <option value="detailed">Deeper paragraphs</option>
+        <option value="custom">Custom prompt</option>
+      </select>
+    </label>
+
+    <div class="custom-prompt" id="customPromptContainer" hidden>
+      <label class="key-label" for="customPrompt">Custom instructions</label>
+      <textarea id="customPrompt" placeholder="Describe how the summary should be generated"></textarea>
+    </div>
+
+    <label class="select-row">
+      <span>Chrome language</span>
+      <select id="chromeLanguage">
+        <option value="en">English</option>
+        <option value="es">Spanish</option>
+        <option value="ja">Japanese</option>
       </select>
     </label>
 

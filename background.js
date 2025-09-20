@@ -4,9 +4,14 @@ const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
 const DEFAULT_PROVIDER = 'gemini';
 
-async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0 }) {
-  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey']);
-  const prompt = buildPromptInstructions(durationSeconds);
+async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt }) {
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'summaryMode', 'customPrompt']);
+  const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
+  const storedCustom = typeof customPrompt === 'string' ? customPrompt : settings.customPrompt;
+  const mode = ['simple', 'detailed', 'custom'].includes(selectedMode) ? selectedMode : 'simple';
+  const custom = (storedCustom || '').toString().trim();
+  const effectiveMode = mode === 'custom' && !custom ? 'simple' : mode;
+  const prompt = buildPromptInstructions(effectiveMode, durationSeconds, custom);
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
 
   switch (provider) {
@@ -19,45 +24,72 @@ async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, duratio
   }
 }
 
-function buildPromptInstructions(durationSeconds) {
-  const lines = [
-    'Summarize the video in a polished ChatGPT recap style.',
-    'Return only plain text (no markdown tables). Follow these rules:',
-    '',
-    '• Use 5-7 sections total.',
-    '• Start every section title with an expressive emoji and a short label (e.g. "📦 Unboxing").',
-    '• After each title, list 2-4 concise bullet points using the "• " glyph. Keep each bullet under ~18 words.',
-    '• Mention any missing transcript portions or uncertainties inside the section they affect.'
+function buildPromptInstructions(mode, durationSeconds, customPrompt) {
+  const total = Number(durationSeconds) || 0;
+  const timeHints = buildTimeHints(total);
+  const sharedGeneral = [
+    'Summarize this YouTube video for a time-pressed viewer. Return plain text only (no tables).',
+    'Be factual and neutral; do not mention the presenter or say "the reviewer".'
   ];
 
-  const total = Number(durationSeconds) || 0;
-  if (total > 0) {
-    const firstEnd = Math.max(Math.floor(total / 3), Math.min(total, 300));
-    let secondEnd = Math.floor((2 * total) / 3);
-    if (secondEnd <= firstEnd) {
-      secondEnd = Math.min(total - 60, firstEnd + 300);
-    }
-    if (secondEnd < firstEnd) {
-      secondEnd = firstEnd;
-    }
-
-    const openingRange = `[00:00–${formatTimestamp(firstEnd)}]`;
-    const midpointRange = `[${formatTimestamp(firstEnd)}–${formatTimestamp(secondEnd)}]`;
-    const finalRange = `[${formatTimestamp(secondEnd)}–${formatTimestamp(total)}]`;
-
-    lines.push(
-      `• Include a section covering the opening ${openingRange} (setup, guest intro, initial themes).`,
-      `• Include a section covering the midpoint ${midpointRange} (major developments or turning points).`,
-      `• Include a section covering the final stretch ${finalRange} (closing arguments, conclusions, or calls to action).`
-    );
+  if (mode === 'detailed') {
+    const lines = [
+      ...sharedGeneral,
+      'Write 4–6 concise paragraphs grouped by theme. Prefer clear prose over bullets.',
+      'Do not include timestamps.',
+      'Do not include thumbnails or images.',
+      'Cover design/build, display/audio, cameras, performance & thermals, battery/charging, and end with a clear takeaway.',
+      'Note uncertainties or missing transcript details inline where relevant.'
+    ];
+    return lines.filter(Boolean).join('\n');
   }
 
-  lines.push(
-    '• Add timestamps in [mm:ss] (or [hh:mm:ss]) for every bullet when possible, including the concluding segment.',
-    '• The final section title must be "👉 Takeaway" and contain 2-3 bullets that capture the overall verdict. Do not add questions or calls-to-action afterwards.'
-  );
+  if (mode === 'custom' && customPrompt) {
+    const lines = [
+      `User instructions (apply first): ${customPrompt}`,
+      ...sharedGeneral,
+      'Include timestamps in [mm:ss] or [hh:mm:ss] when possible (unless the user specifies otherwise).',
+      'If the user instructions conflict with formatting guidance, follow the user. Emoji/bullet style is optional unless requested.',
+      'Keep writing tight, avoid fluff. If structure is unspecified, 5–7 short sections are acceptable.',
+      timeHints
+    ];
+    return lines.filter(Boolean).join('\n');
+  }
 
-  return lines.join('\n');
+  // simple (default)
+  const lines = [
+    ...sharedGeneral,
+    'Include timestamps in [mm:ss] or [hh:mm:ss] when possible.',
+    'Use 5–7 thematic sections relevant to the transcript. Each heading must begin with an expressive emoji, a space, and a short label.',
+    'Do not invent or include irrelevant categories. Never add empty or "N/A" sections.',
+    'Under each heading produce 2–4 factual bullets. Each bullet must start with a single tab character followed by "• " (example: "\t• Brighter 3,000-nit display.").',
+    'Keep bullets under ~18 words.',
+    'Finish with an "👉 Takeaway" section summarizing the key conclusion.',
+    'Call out uncertainties or missing transcript portions inside the affected section/bullet.',
+    timeHints,
+    'Do not append questions or calls-to-action after the "👉 Takeaway" section.'
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+function buildTimeHints(total) {
+  if (total <= 0) return '';
+  const firstEnd = Math.max(Math.floor(total / 3), Math.min(total, 300));
+  let secondEnd = Math.floor((2 * total) / 3);
+  if (secondEnd <= firstEnd) {
+    secondEnd = Math.min(total - 60, firstEnd + 300);
+  }
+  if (secondEnd < firstEnd) {
+    secondEnd = firstEnd;
+  }
+  const openingRange = `[00:00–${formatTimestamp(firstEnd)}]`;
+  const midpointRange = `[${formatTimestamp(firstEnd)}–${formatTimestamp(secondEnd)}]`;
+  const finalRange = `[${formatTimestamp(secondEnd)}–${formatTimestamp(total)}]`;
+  return [
+    `• Include a section covering the opening ${openingRange} (setup, guest intro, initial themes).`,
+    `• Include a section covering the midpoint ${midpointRange} (major developments or turning points).`,
+    `• Include a section covering the final stretch ${finalRange} (closing arguments, conclusions, or calls to action).`
+  ].join('\n');
 }
 
 function formatTimestamp(totalSeconds) {

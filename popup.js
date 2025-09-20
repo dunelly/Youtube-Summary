@@ -1,12 +1,17 @@
 const toggle = document.getElementById('autoSummarize');
 const providerSelect = document.getElementById('provider');
 const statusEl = document.getElementById('status');
+const chromeLanguageSelect = document.getElementById('chromeLanguage');
+const summaryModeSelect = document.getElementById('summaryMode');
+const customPromptContainer = document.getElementById('customPromptContainer');
+const customPromptTextarea = document.getElementById('customPrompt');
 const keyInputs = {
   gemini: document.getElementById('geminiKey'),
   gpt: document.getElementById('openaiKey'),
   claude: document.getElementById('claudeKey')
 };
 const keySections = Array.from(document.querySelectorAll('.key-section'));
+const VALID_CHROME_LANGUAGES = ['en', 'es', 'ja'];
 const defaultPlaceholders = {
   gemini: keyInputs.gemini.placeholder,
   gpt: keyInputs.gpt.placeholder,
@@ -20,18 +25,46 @@ async function load() {
       'provider',
       'geminiKey',
       'openaiKey',
-      'claudeKey'
+      'claudeKey',
+      'chromeOutputLanguage',
+      'summaryMode',
+      'customPrompt'
     ]);
 
     toggle.checked = Boolean(stored.autoSummarize);
     providerSelect.value = stored.provider || 'chrome';
 
+    if (chromeLanguageSelect) {
+      const storedLanguage = VALID_CHROME_LANGUAGES.includes(stored.chromeOutputLanguage)
+        ? stored.chromeOutputLanguage
+        : 'en';
+      chromeLanguageSelect.value = storedLanguage;
+    }
+
     keyInputs.gemini.value = stored.geminiKey || '';
     keyInputs.gpt.value = stored.openaiKey || '';
     keyInputs.claude.value = stored.claudeKey || '';
 
+    // Summary mode + custom prompt
+    if (summaryModeSelect) {
+      const mode = typeof stored.summaryMode === 'string' ? stored.summaryMode : 'simple';
+      summaryModeSelect.value = ['simple', 'detailed', 'custom'].includes(mode) ? mode : 'simple';
+    }
+    if (customPromptTextarea) {
+      customPromptTextarea.value = (stored.customPrompt || '').toString();
+    }
+    toggleCustomPromptVisibility();
+
     updateStatus(toggle.checked);
     highlightActiveKey();
+    updateLanguageState();
+
+    // Ensure we have persistent access to youtube.com (requests once, then persists).
+    await ensureYouTubePermission();
+
+    // Try to inject the in-page panel when popup opens on a YouTube tab.
+    // Works even if site access is still "On click" before the user accepts.
+    maybeInjectOnActiveYouTubeTab();
   } catch (error) {
     console.error('[YAIVS] Failed to load popup settings', error);
   }
@@ -67,6 +100,8 @@ function highlightActiveKey() {
   } else {
     updateStatus(toggle.checked);
   }
+
+  updateLanguageState();
 }
 
 toggle.addEventListener('change', () => {
@@ -88,6 +123,38 @@ providerSelect.addEventListener('change', () => {
     .catch(error => console.error('[YAIVS] Failed to save provider selection', error));
 });
 
+if (summaryModeSelect) {
+  summaryModeSelect.addEventListener('change', () => {
+    const value = summaryModeSelect.value;
+    const mode = ['simple', 'detailed', 'custom'].includes(value) ? value : 'simple';
+    chrome.storage.sync
+      .set({ summaryMode: mode })
+      .then(() => toggleCustomPromptVisibility())
+      .catch(error => console.error('[YAIVS] Failed to save summary mode', error));
+  });
+}
+
+if (customPromptTextarea) {
+  const handler = () => {
+    const value = customPromptTextarea.value.trim();
+    chrome.storage.sync
+      .set({ customPrompt: value })
+      .catch(error => console.error('[YAIVS] Failed to save custom prompt', error));
+  };
+  customPromptTextarea.addEventListener('change', handler);
+  customPromptTextarea.addEventListener('blur', handler);
+}
+
+if (chromeLanguageSelect) {
+  chromeLanguageSelect.addEventListener('change', () => {
+    const selection = chromeLanguageSelect.value;
+    const value = VALID_CHROME_LANGUAGES.includes(selection) ? selection : 'en';
+    chrome.storage.sync
+      .set({ chromeOutputLanguage: value })
+      .catch(error => console.error('[YAIVS] Failed to save Chrome language preference', error));
+  });
+}
+
 Object.entries(keyInputs).forEach(([provider, input]) => {
   input.addEventListener('change', () => {
     const value = input.value.trim();
@@ -99,3 +166,57 @@ Object.entries(keyInputs).forEach(([provider, input]) => {
 });
 
 load();
+
+function updateLanguageState() {
+  if (!chromeLanguageSelect) return;
+  const provider = providerSelect.value;
+  const isChrome = provider === 'chrome';
+  chromeLanguageSelect.disabled = !isChrome;
+  const label = chromeLanguageSelect.closest('label');
+  if (!label) return;
+  if (isChrome) {
+    label.removeAttribute('aria-disabled');
+    label.classList.remove('disabled');
+  } else {
+    label.setAttribute('aria-disabled', 'true');
+    label.classList.add('disabled');
+  }
+}
+
+function toggleCustomPromptVisibility() {
+  if (!customPromptContainer || !summaryModeSelect) return;
+  const isCustom = summaryModeSelect.value === 'custom';
+  customPromptContainer.hidden = !isCustom;
+}
+
+async function maybeInjectOnActiveYouTubeTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.id || !tab.url) return;
+    const url = tab.url;
+    const isYouTube = /https?:\/\/(?:www\.|m\.)?youtube\.com\//i.test(url);
+    if (!isYouTube) return;
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['content/index.js']
+    });
+  } catch (error) {
+    console.debug('[YAIVS] Injection skipped/failed (likely already injected):', error?.message || String(error));
+  }
+}
+
+async function ensureYouTubePermission() {
+  try {
+    const origin = 'https://www.youtube.com/*';
+    const has = await chrome.permissions.contains({ origins: [origin] });
+    if (has) return;
+    const granted = await chrome.permissions.request({ origins: [origin] });
+    if (!granted) {
+      // User declined. We can still inject on click via activeTab.
+      return;
+    }
+    // If granted, content scripts will auto-run on future YouTube pages.
+  } catch (err) {
+    // Ignore; permission request may fail in older Chrome or restricted contexts.
+  }
+}

@@ -1,10 +1,21 @@
 (() => {
+  // Guard against double-injection when user clicks the extension icon to inject on demand
+  const ROOT = document.documentElement;
+  if (ROOT && ROOT.hasAttribute('data-yaivs-active')) {
+    return;
+  }
+  if (ROOT) {
+    ROOT.setAttribute('data-yaivs-active', 'true');
+  }
   const PANEL_ID = 'yaivs-summary-panel';
   const STYLE_ID = 'yaivs-summary-styles';
   const YOUTUBE_TRANSCRIPT_ENDPOINT = 'https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false';
   const DEFAULT_SETTINGS = {
     autoSummarize: false,
-    provider: 'chrome'
+    provider: 'chrome',
+    chromeOutputLanguage: 'en',
+    summaryMode: 'simple',
+    customPrompt: ''
   };
   const DECODER = document.createElement('textarea');
   const AUTH_PATTERNS = [
@@ -47,6 +58,20 @@
     });
   }
 
+  function findDescriptionElement(root = document) {
+    const candidates = [
+      '#description-inline-expander',
+      '#description',
+      'ytd-watch-metadata #description-inline-expander',
+      'ytd-watch-metadata #description'
+    ];
+    for (const sel of candidates) {
+      const el = root.querySelector?.(sel);
+      if (el) return el;
+    }
+    return null;
+  }
+
   async function getPanelMountPoint() {
     const selectors = [
       '#primary ytd-watch-metadata',
@@ -63,14 +88,15 @@
       const container = document.querySelector(selector);
       if (!container) continue;
 
-      const description = container.querySelector?.('#description');
+      const description = findDescriptionElement(container) || findDescriptionElement(document);
       if (description?.parentElement) {
-        return { parent: description.parentElement, anchor: description };
+        return { parent: description.parentElement, anchor: description, container };
       }
 
       return {
         parent: container,
-        anchor: container.firstElementChild || null
+        anchor: container.firstElementChild || null,
+        container
       };
     }
 
@@ -95,14 +121,40 @@
     if (!summary) return '';
     const escaped = escapeHtml(summary);
 
-    const withLinks = escaped.replace(/\[(\d{1,3}):(\d{2})(?::(\d{2}))?\]/g, (match, a, b, c) => {
-      const first = Number(a);
-      const second = Number(b);
-      const third = typeof c !== 'undefined' ? Number(c) : null;
-      let seconds = first * 60 + second;
-      if (third !== null) seconds = first * 3600 + second * 60 + third;
-      if (!Number.isFinite(seconds)) return match;
-      return `<a href="#" class="yaivs-timestamp" data-seconds="${seconds}">${match}</a>`;
+    // Linkify [mm:ss], [hh:mm:ss], and ranges like [mm:ss–mm:ss] or [hh:mm:ss - hh:mm:ss]
+    const withLinks = escaped.replace(/\[((\d{1,3}):(\d{2})(?::(\d{2}))?)(?:\s*[–-]\s*((\d{1,3}):(\d{2})(?::(\d{2}))?))?\]/g, (
+      match,
+      fullA,
+      a1,
+      a2,
+      a3,
+      fullB,
+      b1,
+      b2,
+      b3
+    ) => {
+      const toSeconds = (hOrM, m, s) => {
+        const H = Number(hOrM);
+        const M = Number(m);
+        const S = typeof s !== 'undefined' ? Number(s) : null;
+        if ([H, M].some(Number.isNaN)) return null;
+        if (S !== null && Number.isNaN(S)) return null;
+        return S === null ? H * 60 + M : H * 3600 + M * 60 + S;
+      };
+
+      const secA = toSeconds(a1, a2, a3);
+      if (secA === null) return match;
+      const anchorA = `<a href="#" class="yaivs-timestamp" data-seconds="${secA}">${fullA}</a>`;
+
+      if (!fullB) {
+        return `[${anchorA}]`;
+      }
+
+      const secB = toSeconds(b1, b2, b3);
+      if (secB === null) return `[${anchorA}]`;
+      const dash = match.includes('–') ? '–' : '-';
+      const anchorB = `<a href="#" class="yaivs-timestamp" data-seconds="${secB}">${fullB}</a>`;
+      return `[${anchorA} ${dash} ${anchorB}]`;
     });
 
     return withLinks.replace(/\n/g, '<br>');
@@ -203,14 +255,26 @@
 
     async load() {
       try {
-        const stored = await chrome.storage.sync.get(['autoSummarize', 'provider']);
+        const stored = await chrome.storage.sync.get([
+          'autoSummarize',
+          'provider',
+          'chromeOutputLanguage',
+          'summaryMode',
+          'customPrompt'
+        ]);
         if (Object.prototype.hasOwnProperty.call(stored, 'autoSummarize')) {
           this.values.autoSummarize = Boolean(stored.autoSummarize);
         }
         this.values.provider = stored.provider || this.defaults.provider || 'gemini';
+        this.values.chromeOutputLanguage = stored.chromeOutputLanguage || this.defaults.chromeOutputLanguage || 'en';
+        this.values.summaryMode = stored.summaryMode || this.defaults.summaryMode || 'simple';
+        this.values.customPrompt = stored.customPrompt || this.defaults.customPrompt || '';
       } catch (error) {
         console.warn('[YAIVS] Failed to load settings', error);
         this.values.provider = this.defaults.provider || 'gemini';
+        this.values.chromeOutputLanguage = this.defaults.chromeOutputLanguage || 'en';
+        this.values.summaryMode = this.defaults.summaryMode || 'simple';
+        this.values.customPrompt = this.defaults.customPrompt || '';
       }
       return this.values;
     }
@@ -226,6 +290,21 @@
 
       if (Object.prototype.hasOwnProperty.call(changes, 'provider')) {
         this.values.provider = changes.provider.newValue || 'gemini';
+        patched = true;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(changes, 'chromeOutputLanguage')) {
+        this.values.chromeOutputLanguage = changes.chromeOutputLanguage.newValue || 'en';
+        patched = true;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(changes, 'summaryMode')) {
+        this.values.summaryMode = changes.summaryMode.newValue || 'simple';
+        patched = true;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(changes, 'customPrompt')) {
+        this.values.customPrompt = changes.customPrompt.newValue || '';
         patched = true;
       }
 
@@ -515,14 +594,19 @@
   class ChromeSummarizer {
     constructor() {
       this.instancePromise = null;
+      this.currentLanguage = null;
     }
 
-    async summarize(transcript, durationSeconds, onProgress) {
-      const summarizer = await this.ensureInstance(durationSeconds, onProgress);
-      return this.summarizeWithInstance(summarizer, transcript, durationSeconds);
+    async summarize(transcript, durationSeconds, outputLanguage, summaryMode, customPrompt, onProgress) {
+      const language = outputLanguage || 'en';
+      const summarizer = await this.ensureInstance(durationSeconds, language, onProgress);
+      const mode = ['simple', 'detailed', 'custom'].includes(summaryMode) ? summaryMode : 'simple';
+      const promptText = typeof customPrompt === 'string' ? customPrompt.trim() : '';
+      const effectiveMode = mode === 'custom' && !promptText ? 'simple' : mode;
+      return this.summarizeWithInstance(summarizer, transcript, durationSeconds, language, effectiveMode, promptText);
     }
 
-    async ensureInstance(durationSeconds, onProgress) {
+    async ensureInstance(durationSeconds, outputLanguage, onProgress) {
       if (typeof Summarizer === 'undefined') {
         throw new Error('Chrome AI summarizer is not supported on this device.');
       }
@@ -532,12 +616,20 @@
         throw new Error('Chrome AI summarizer is unavailable.');
       }
 
+      if (this.currentLanguage && this.currentLanguage !== outputLanguage) {
+        await this.disposeCurrentInstance();
+      }
+
       if (!this.instancePromise) {
         const length = durationSeconds > 2700 ? 'long' : 'medium';
         const options = {
           type: 'key-points',
           format: 'markdown',
           length,
+          outputLanguage,
+          output_language: outputLanguage,
+          language: outputLanguage,
+          output: { language: outputLanguage },
           monitor: monitor => {
             if (typeof monitor?.addEventListener === 'function') {
               monitor.addEventListener('downloadprogress', event => {
@@ -550,14 +642,24 @@
           }
         };
 
+        console.debug('[YAIVS] Creating Chrome summarizer with options:', options);
+
         if (typeof onProgress === 'function' && (availability === 'downloadable' || availability === 'downloading')) {
           onProgress(0);
         }
 
-        this.instancePromise = Summarizer.create(options).catch(error => {
-          this.instancePromise = null;
-          throw error;
-        });
+        this.instancePromise = Summarizer.create(options)
+          .then(instance => {
+            this.currentLanguage = outputLanguage;
+            return instance;
+          })
+          .catch(error => {
+            this.instancePromise = null;
+            if (this.currentLanguage === outputLanguage) {
+              this.currentLanguage = null;
+            }
+            throw error;
+          });
       }
 
       const instance = await this.instancePromise;
@@ -567,28 +669,58 @@
       return instance;
     }
 
-    async summarizeWithInstance(instance, transcript, durationSeconds) {
+    async disposeCurrentInstance() {
+      if (!this.instancePromise) {
+        this.currentLanguage = null;
+        return;
+      }
+
+      try {
+        const instance = await this.instancePromise.catch(() => null);
+        if (instance?.destroy) {
+          try {
+            instance.destroy();
+          } catch (destroyError) {
+            console.warn('[YAIVS] Failed to destroy Chrome summarizer instance', destroyError);
+          }
+        }
+      } finally {
+        this.instancePromise = null;
+        this.currentLanguage = null;
+      }
+    }
+
+    reset() {
+      this.disposeCurrentInstance();
+    }
+
+    async summarizeWithInstance(instance, transcript, durationSeconds, outputLanguage, summaryMode, customPrompt) {
       const minutes = Math.max(1, Math.round(durationSeconds / 60));
-      const baseContext = `Summarize this YouTube transcript into concise bullet points for a viewer with limited time. Cover the beginning, middle, and end of the approximately ${minutes}-minute video.`;
+      const baseContext = this.buildBaseContext(minutes, durationSeconds, summaryMode, customPrompt);
       const chunkSize = 9000;
 
       if (transcript.length <= chunkSize) {
-        return instance.summarize(transcript, { context: baseContext });
+        const requestOptions = this.buildSummarizeOptions(baseContext, outputLanguage);
+        console.debug('[YAIVS] Summarize request (single chunk):', requestOptions);
+        return instance.summarize(transcript, requestOptions);
       }
 
       const chunks = this.chunkTranscript(transcript, chunkSize);
       const partialSummaries = [];
 
       for (let index = 0; index < chunks.length; index += 1) {
-        const segmentContext = `${baseContext}\nThis is segment ${index + 1} of ${chunks.length}; capture only the new or noteworthy points from this portion.`;
-        const partial = await instance.summarize(chunks[index], { context: segmentContext });
+        const segmentContext = `${baseContext}\nThis is segment ${index + 1} of ${chunks.length}; include only new or noteworthy facts from this portion while keeping the same formatting/style.`;
+        const requestOptions = this.buildSummarizeOptions(segmentContext, outputLanguage);
+        console.debug('[YAIVS] Summarize request (chunk segment):', index + 1, 'of', chunks.length, requestOptions);
+        const partial = await instance.summarize(chunks[index], requestOptions);
         partialSummaries.push(partial.trim());
       }
 
       const combined = partialSummaries.join('\n\n');
-      return instance.summarize(combined, {
-        context: 'Merge these partial summaries into a single bullet list for the entire video. Remove duplicates and keep bullets tight.'
-      });
+      const mergeContext = this.buildMergeContext(summaryMode);
+      const mergeOptions = this.buildSummarizeOptions(mergeContext, outputLanguage);
+      console.debug('[YAIVS] Summarize request (merge):', mergeOptions);
+      return instance.summarize(combined, mergeOptions);
     }
 
     chunkTranscript(text, size) {
@@ -606,6 +738,99 @@
         start = end;
       }
       return chunks;
+    }
+
+    buildSummarizeOptions(context, outputLanguage) {
+      return {
+        context,
+        outputLanguage,
+        output_language: outputLanguage,
+        language: outputLanguage,
+        output: { language: outputLanguage }
+      };
+    }
+
+    buildBaseContext(minutes, durationSeconds, mode, customPrompt) {
+      const timeHints = this.buildTimeHints(durationSeconds);
+      const sharedGeneral = [
+        `Summarize this YouTube transcript for a time-pressed viewer (≈${minutes} minutes long).`,
+        'Be factual, neutral, and do not mention the presenter or say "the reviewer".'
+      ];
+
+      if (mode === 'detailed') {
+        return [
+          ...sharedGeneral,
+          'Write 4–6 concise paragraphs grouped by theme. Prefer readable prose over bullets.',
+          'Do not include timestamps.',
+          'Do not include thumbnails or images.',
+          'Call out design/build, display/audio, cameras, performance & thermals, battery/charging, and conclude with a clear takeaway.',
+          'Note uncertainties or missing transcript portions inline where relevant.'
+        ].filter(Boolean).join(' ');
+      }
+
+      if (mode === 'custom' && customPrompt) {
+        return [
+          `User instructions (apply first): ${customPrompt}`,
+          ...sharedGeneral,
+          'Include timestamps in [mm:ss] or [hh:mm:ss] where possible (unless user specifies otherwise).',
+          'If user instructions conflict with formatting guidance, follow the user. Emoji headings/bullets are optional unless requested.',
+          'Keep writing tight and remove fluff. If structure is unspecified, 5–7 short sections are acceptable.',
+          timeHints
+        ].filter(Boolean).join(' ');
+      }
+
+      // simple (default)
+      return [
+        ...sharedGeneral,
+        'Include timestamps in [mm:ss] or [hh:mm:ss] where possible.',
+        'Use 5–7 thematic sections relevant to the transcript. Each heading must begin with an expressive emoji, a space, and a short label.',
+        'Do not invent or include irrelevant categories. Never add empty or "N/A" sections.',
+        'Under each heading add 2–4 bullets. Each bullet must start with a single tab character then "• " (example: "\t• Battery lasts longer.").',
+        'Keep bullets under ~18 words, concise and factual.',
+        'Finish with an "👉 Takeaway" section that states the main conclusion.',
+        'Call out uncertainties or missing transcript details inside the affected section/bullet.',
+        timeHints
+      ].filter(Boolean).join(' ');
+    }
+
+    buildTimeHints(totalSeconds) {
+      const total = Number(totalSeconds) || 0;
+      if (total <= 0) return '';
+      const firstEnd = Math.max(Math.floor(total / 3), Math.min(total, 300));
+      let secondEnd = Math.floor((2 * total) / 3);
+      if (secondEnd <= firstEnd) {
+        secondEnd = Math.min(total - 60, firstEnd + 300);
+      }
+      if (secondEnd < firstEnd) {
+        secondEnd = firstEnd;
+      }
+      const openingRange = `[00:00–${this.formatTimestamp(firstEnd)}]`;
+      const midpointRange = `[${this.formatTimestamp(firstEnd)}–${this.formatTimestamp(secondEnd)}]`;
+      const finalRange = `[${this.formatTimestamp(secondEnd)}–${this.formatTimestamp(total)}]`;
+      return [
+        `Cover the opening ${openingRange} (setup/intro), the midpoint ${midpointRange} (developments/turning points), and the final stretch ${finalRange} (conclusions/calls to action).`
+      ].join(' ');
+    }
+
+    formatTimestamp(totalSeconds) {
+      if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '00:00';
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = Math.floor(totalSeconds % 60);
+      const mm = minutes.toString().padStart(2, '0');
+      const ss = seconds.toString().padStart(2, '0');
+      return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+    }
+
+    buildMergeContext(mode) {
+      if (mode === 'detailed') {
+        return 'Merge these partial summaries into one cohesive multi-paragraph recap. Prefer short paragraphs, avoid bullets, remove duplicates, keep the writing tight. Do not include timestamps or thumbnails/images.';
+      }
+      if (mode === 'custom') {
+        return 'Merge these partial summaries while honoring the user instructions. Keep consistent style, remove duplicates, and maintain concise, clear writing.';
+      }
+      // simple
+      return 'Merge these partial summaries into one cohesive recap. Preserve the emoji section headings and tab-indented "• " bullets, remove duplicates, and keep the writing tight.';
     }
   }
 
@@ -648,7 +873,8 @@
       this.isSummarizing = false;
       this.autoTriggeredVideoId = null;
       this.chromeSummarizer = new ChromeSummarizer();
-      this.settings.subscribe(() => this.updateInfoMessage());
+      this.lastKnownChromeLanguage = null;
+      this.settings.subscribe(values => this.handleSettingsChange(values));
       this.observeNavigation();
       this.setup();
     }
@@ -665,6 +891,10 @@
       injectStyles();
 
       await this.settings.ready;
+
+      if (this.lastKnownChromeLanguage === null) {
+        this.lastKnownChromeLanguage = this.settings.get('chromeOutputLanguage') || 'en';
+      }
 
       const mountPoint = await getPanelMountPoint();
       if (!mountPoint?.parent) {
@@ -689,6 +919,8 @@
 
       this.bindElements(panel);
       this.resetState();
+      // Ensure the panel is placed immediately above the description once it appears.
+      this.ensureAboveDescription(mountPoint.container);
       this.maybeAutoSummarize();
     }
 
@@ -727,6 +959,37 @@
       this.updateInfoMessage();
     }
 
+    ensureAboveDescription(container) {
+      try {
+        const moveAbove = () => {
+          if (!this.panel) return;
+          const description = findDescriptionElement(container) || findDescriptionElement(document);
+          if (!description || !description.parentElement) return;
+          const parent = description.parentElement;
+          const alreadyCorrect = this.panel.parentElement === parent && this.panel.nextElementSibling === description;
+          if (!alreadyCorrect) {
+            parent.insertBefore(this.panel, description);
+          }
+        };
+
+        // Try immediately
+        moveAbove();
+
+        // Observe for late-loaded description
+        const target = container || document;
+        const observer = new MutationObserver(() => {
+          const desc = findDescriptionElement(container) || findDescriptionElement(document);
+          if (desc) {
+            moveAbove();
+            observer.disconnect();
+          }
+        });
+        observer.observe(target, { childList: true, subtree: true });
+      } catch (err) {
+        console.debug('[YAIVS] ensureAboveDescription failed:', err?.message || String(err));
+      }
+    }
+
     resetState() {
       if (!this.panel) return;
       if (this.summaryEl) {
@@ -752,11 +1015,12 @@
       try {
         await this.settings.ready;
         const provider = this.settings.get('provider') || 'gemini';
+        const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'simple');
         const { text: transcript, durationSeconds } = await this.transcriptService.collect();
         let activeProvider = provider;
         let summary;
 
-        this.setLoading(true, `Summarizing with ${this.getProviderLabel(provider)}…`);
+        this.setLoading(true, `Summarizing (${modeLabel}) with ${this.getProviderLabel(provider)}…`);
 
         try {
           summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds);
@@ -765,7 +1029,7 @@
             console.warn('[YAIVS] Chrome summarizer failed, falling back to Gemini.', error);
             activeProvider = 'gemini';
             this.updateStatus('Chrome AI unavailable, falling back to Gemini…', 'loading');
-            this.setLoading(true, `Summarizing with ${this.getProviderLabel(activeProvider)}…`);
+            this.setLoading(true, `Summarizing (${modeLabel}) with ${this.getProviderLabel(activeProvider)}…`);
             summary = await this.summarizeUsingProvider(activeProvider, transcript, durationSeconds);
           } else {
             throw error;
@@ -773,7 +1037,7 @@
         }
 
         this.renderSummary(summary);
-        this.updateStatus(`Summary ready (${this.getProviderLabel(activeProvider)}).`, 'success');
+        this.updateStatus(`Summary ready (${this.getProviderLabel(activeProvider)} — ${modeLabel}).`, 'success');
       } catch (error) {
         console.error('Summary generation failed', error);
         this.renderSummary('');
@@ -826,7 +1090,10 @@
 
     async summarizeUsingProvider(provider, transcript, durationSeconds) {
       if (provider === 'chrome') {
-        return this.chromeSummarizer.summarize(transcript, durationSeconds, progress => {
+        const language = this.settings.get('chromeOutputLanguage') || 'en';
+        const mode = this.settings.get('summaryMode') || 'simple';
+        const customPrompt = (this.settings.get('customPrompt') || '').trim();
+        return this.chromeSummarizer.summarize(transcript, durationSeconds, language, mode, customPrompt, progress => {
           if (progress < 1) {
             this.updateStatus(`Downloading Chrome AI model… ${Math.round(progress * 100)}%`, 'loading');
           } else {
@@ -840,7 +1107,9 @@
         type: 'summarizeVideo',
         provider,
         transcript,
-        durationSeconds
+        durationSeconds,
+        summaryMode: this.settings.get('summaryMode') || 'simple',
+        customPrompt: (this.settings.get('customPrompt') || '').trim()
       });
 
       if (!response) throw new Error('No response from background service.');
@@ -867,12 +1136,24 @@
       }
 
       const providerLabel = this.getProviderLabel(this.settings.get('provider') || 'gemini');
+      const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'simple');
       if (this.settings.get('autoSummarize')) {
-        this.statusEl.textContent = `Preparing summary with ${providerLabel}…`;
+        this.statusEl.textContent = `Preparing summary (${modeLabel}) with ${providerLabel}…`;
         this.statusEl.className = 'yaivs-status yaivs-status--loading';
       } else {
-        this.statusEl.textContent = `Click to summarize with ${providerLabel}.`;
+        this.statusEl.textContent = `Click to summarize with ${providerLabel} — ${modeLabel}.`;
         this.statusEl.className = 'yaivs-status yaivs-status--info';
+      }
+    }
+
+    handleSettingsChange(values) {
+      this.updateInfoMessage();
+      if (!values) return;
+
+      const language = values.chromeOutputLanguage || 'en';
+      if (language !== this.lastKnownChromeLanguage) {
+        this.lastKnownChromeLanguage = language;
+        this.chromeSummarizer.reset();
       }
     }
 
@@ -886,6 +1167,17 @@
           return 'Claude';
         default:
           return 'Gemini';
+      }
+    }
+
+    getModeLabel(mode) {
+      switch (mode) {
+        case 'detailed':
+          return 'Detailed';
+        case 'custom':
+          return 'Custom';
+        default:
+          return 'Simple';
       }
     }
   }
