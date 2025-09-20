@@ -672,15 +672,13 @@
       container.id = PANEL_ID;
       container.className = 'yaivs-panel';
       container.innerHTML = `
+        <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
         <div class="yaivs-prompt" id="yaivs-prompt-row">
           <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
           <button class="yaivs-clear" type="button" id="yaivs-clear" aria-label="Clear">×</button>
-        </div>
-        <header class="yaivs-panel__header">
-          <span class="yaivs-spacer"></span>
           <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">Ask/Summarize</button>
-          <button class="yaivs-button yaivs-button--ghost yaivs-button--split" type="button" id="yaivs-style">▼</button>
-        </header>
+          <button class="yaivs-button yaivs-button--ghost yaivs-button--split" type="button" id="yaivs-style" aria-label="Style menu">▼</button>
+        </div>
         <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
           <button type="button" data-style="simple">Bullets</button>
           <button type="button" data-style="detailed">Detailed</button>
@@ -690,7 +688,6 @@
           <button type="button" data-style="outline">Outline</button>
         </div>
         <div class="yaivs-hint" id="yaivs-hint">Press Enter to ask</div>
-        <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
         <div class="yaivs-tools" id="yaivs-tools" hidden>
           <button type="button" id="yaivs-copy" class="yaivs-tool">Copy</button>
           <span class="yaivs-divider"></span>
@@ -1103,13 +1100,8 @@
       }
 
       .yaivs-panel__header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
+        display: none; /* header no longer used for layout */
       }
-
-      .yaivs-spacer { flex: 1; }
 
       .yaivs-panel__title {
         margin: 0;
@@ -1128,8 +1120,8 @@
         font-family: inherit;
         font-size: 12px;
         font-weight: 600;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        text-transform: none;
         cursor: pointer;
         transition: background 0.2s ease, border 0.2s ease, color 0.2s ease;
         flex-shrink: 0;
@@ -1180,7 +1172,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-top: 6px;
+        margin-top: 0;
       }
 
       .yaivs-input {
@@ -1213,15 +1205,15 @@
 
       .yaivs-style-menu {
         position: absolute;
-        right: 0;
-        top: 38px;
+        right: 8px;
+        top: 52px;
         display: flex;
         flex-direction: column;
         gap: 4px;
         padding: 8px;
         border: 1px solid var(--yt-spec-badge-chip-background, rgba(255,255,255,0.12));
         background: var(--yt-spec-general-background-b, rgba(32,32,32,0.98));
-        color: var(--yt-spec-text-primary, #eaeaea);
+        color: #eaeaea;
         border-radius: 8px;
         z-index: 9999;
         box-shadow: 0 8px 24px rgba(0,0,0,0.35);
@@ -1236,6 +1228,7 @@
         padding: 6px 8px;
         border-radius: 6px;
         cursor: pointer;
+        color: #eaeaea;
       }
 
       .yaivs-style-menu > button:hover { background: rgba(255,255,255,0.08); }
