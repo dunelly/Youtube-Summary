@@ -85,23 +85,24 @@
     <label class="select-row">
       <span>Choose model</span>
       <select id="provider">
+        <option value="chrome">Chrome AI (on-device)</option>
         <option value="gemini">Gemini</option>
         <option value="gpt">GPT (OpenAI)</option>
         <option value="claude">Claude (Anthropic)</option>
       </select>
     </label>
 
-    <section class="key-section">
+    <section class="key-section" data-provider="gemini">
       <label class="key-label" for="geminiKey">Gemini API key</label>
       <input type="password" id="geminiKey" placeholder="Paste Gemini key" autocomplete="off" />
     </section>
 
-    <section class="key-section">
+    <section class="key-section" data-provider="gpt">
       <label class="key-label" for="openaiKey">OpenAI API key</label>
       <input type="password" id="openaiKey" placeholder="Paste OpenAI key" autocomplete="off" />
     </section>
 
-    <section class="key-section">
+    <section class="key-section" data-provider="claude">
       <label class="key-label" for="claudeKey">Anthropic API key</label>
       <input type="password" id="claudeKey" placeholder="Paste Claude key" autocomplete="off" />
     </section>

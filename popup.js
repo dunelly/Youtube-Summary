@@ -6,6 +6,12 @@ const keyInputs = {
   gpt: document.getElementById('openaiKey'),
   claude: document.getElementById('claudeKey')
 };
+const keySections = Array.from(document.querySelectorAll('.key-section'));
+const defaultPlaceholders = {
+  gemini: keyInputs.gemini.placeholder,
+  gpt: keyInputs.gpt.placeholder,
+  claude: keyInputs.claude.placeholder
+};
 
 async function load() {
   try {
@@ -18,7 +24,7 @@ async function load() {
     ]);
 
     toggle.checked = Boolean(stored.autoSummarize);
-    providerSelect.value = stored.provider || 'gemini';
+    providerSelect.value = stored.provider || 'chrome';
 
     keyInputs.gemini.value = stored.geminiKey || '';
     keyInputs.gpt.value = stored.openaiKey || '';
@@ -36,11 +42,30 @@ function updateStatus(value) {
 }
 
 function highlightActiveKey() {
-  const sections = document.querySelectorAll('.key-section');
-  sections.forEach(section => section.classList.remove('active'));
-  const activeInput = keyInputs[providerSelect.value];
-  if (activeInput) {
-    activeInput.closest('.key-section')?.classList.add('active');
+  const provider = providerSelect.value;
+  keySections.forEach(section => {
+    const sectionProvider = section.dataset.provider;
+    if (provider === 'chrome') {
+      section.classList.remove('active');
+      const input = section.querySelector('input');
+      input.disabled = true;
+      input.placeholder = `${defaultPlaceholders[sectionProvider]} (not required for Chrome AI)`;
+    } else if (sectionProvider === provider) {
+      section.classList.add('active');
+      const input = section.querySelector('input');
+      input.disabled = false;
+      input.placeholder = defaultPlaceholders[sectionProvider];
+    } else {
+      section.classList.remove('active');
+      const input = section.querySelector('input');
+      input.disabled = false;
+      input.placeholder = defaultPlaceholders[sectionProvider];
+    }
+  });
+  if (provider === 'chrome') {
+    statusEl.textContent = `${toggle.checked ? 'Summaries run automatically.' : 'Click the in-page button to summarize.'} (No API key required for Chrome AI.)`;
+  } else {
+    updateStatus(toggle.checked);
   }
 }
 
@@ -48,7 +73,10 @@ toggle.addEventListener('change', () => {
   const value = toggle.checked;
   chrome.storage.sync
     .set({ autoSummarize: value })
-    .then(() => updateStatus(value))
+    .then(() => {
+      updateStatus(value);
+      highlightActiveKey();
+    })
     .catch(error => console.error('[YAIVS] Failed to save popup settings', error));
 });
 

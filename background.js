@@ -211,6 +211,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request?.type === 'summarizeVideo') {
+    if (request.provider === 'chrome') {
+      sendResponse({ status: 'error', message: 'Chrome summarizer is handled in the content script.' });
+      return true;
+    }
     summarizeVideo(request)
       .then(summary => sendResponse({ status: 'ok', summary }))
       .catch(error => sendResponse({ status: 'error', message: error.message }));

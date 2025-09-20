@@ -4,7 +4,7 @@
   const YOUTUBE_TRANSCRIPT_ENDPOINT = 'https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false';
   const DEFAULT_SETTINGS = {
     autoSummarize: false,
-    provider: 'gemini'
+    provider: 'chrome'
   };
   const DECODER = document.createElement('textarea');
   const AUTH_PATTERNS = [
@@ -510,6 +510,106 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Chrome Summarizer client
+  // ---------------------------------------------------------------------------
+  class ChromeSummarizer {
+    constructor() {
+      this.instancePromise = null;
+    }
+
+    async summarize(transcript, durationSeconds, onProgress) {
+      const summarizer = await this.ensureInstance(durationSeconds, onProgress);
+      return this.summarizeWithInstance(summarizer, transcript, durationSeconds);
+    }
+
+    async ensureInstance(durationSeconds, onProgress) {
+      if (typeof Summarizer === 'undefined') {
+        throw new Error('Chrome AI summarizer is not supported on this device.');
+      }
+
+      const availability = await Summarizer.availability();
+      if (availability === 'unavailable') {
+        throw new Error('Chrome AI summarizer is unavailable.');
+      }
+
+      if (!this.instancePromise) {
+        const length = durationSeconds > 2700 ? 'long' : 'medium';
+        const options = {
+          type: 'key-points',
+          format: 'markdown',
+          length,
+          monitor: monitor => {
+            if (typeof monitor?.addEventListener === 'function') {
+              monitor.addEventListener('downloadprogress', event => {
+                if (typeof onProgress === 'function') {
+                  const value = typeof event.loaded === 'number' ? event.loaded : 0;
+                  onProgress(Math.min(1, Math.max(0, value)));
+                }
+              });
+            }
+          }
+        };
+
+        if (typeof onProgress === 'function' && (availability === 'downloadable' || availability === 'downloading')) {
+          onProgress(0);
+        }
+
+        this.instancePromise = Summarizer.create(options).catch(error => {
+          this.instancePromise = null;
+          throw error;
+        });
+      }
+
+      const instance = await this.instancePromise;
+      if (typeof onProgress === 'function') {
+        onProgress(1);
+      }
+      return instance;
+    }
+
+    async summarizeWithInstance(instance, transcript, durationSeconds) {
+      const minutes = Math.max(1, Math.round(durationSeconds / 60));
+      const baseContext = `Summarize this YouTube transcript into concise bullet points for a viewer with limited time. Cover the beginning, middle, and end of the approximately ${minutes}-minute video.`;
+      const chunkSize = 9000;
+
+      if (transcript.length <= chunkSize) {
+        return instance.summarize(transcript, { context: baseContext });
+      }
+
+      const chunks = this.chunkTranscript(transcript, chunkSize);
+      const partialSummaries = [];
+
+      for (let index = 0; index < chunks.length; index += 1) {
+        const segmentContext = `${baseContext}\nThis is segment ${index + 1} of ${chunks.length}; capture only the new or noteworthy points from this portion.`;
+        const partial = await instance.summarize(chunks[index], { context: segmentContext });
+        partialSummaries.push(partial.trim());
+      }
+
+      const combined = partialSummaries.join('\n\n');
+      return instance.summarize(combined, {
+        context: 'Merge these partial summaries into a single bullet list for the entire video. Remove duplicates and keep bullets tight.'
+      });
+    }
+
+    chunkTranscript(text, size) {
+      const chunks = [];
+      let start = 0;
+      while (start < text.length) {
+        let end = Math.min(text.length, start + size);
+        if (end < text.length) {
+          const boundary = text.lastIndexOf('\n', end);
+          if (boundary > start + size * 0.4) {
+            end = boundary;
+          }
+        }
+        chunks.push(text.slice(start, end));
+        start = end;
+      }
+      return chunks;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Provider utilities
   // ---------------------------------------------------------------------------
   async function ensureProviderKey(provider) {
@@ -547,6 +647,7 @@
       this.generateBtn = null;
       this.isSummarizing = false;
       this.autoTriggeredVideoId = null;
+      this.chromeSummarizer = new ChromeSummarizer();
       this.settings.subscribe(() => this.updateInfoMessage());
       this.observeNavigation();
       this.setup();
@@ -651,22 +752,28 @@
       try {
         await this.settings.ready;
         const provider = this.settings.get('provider') || 'gemini';
-        await ensureProviderKey(provider);
         const { text: transcript, durationSeconds } = await this.transcriptService.collect();
+        let activeProvider = provider;
+        let summary;
+
         this.setLoading(true, `Summarizing with ${this.getProviderLabel(provider)}…`);
 
-        const response = await chrome.runtime.sendMessage({
-          type: 'summarizeVideo',
-          provider,
-          transcript,
-          durationSeconds
-        });
+        try {
+          summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds);
+        } catch (error) {
+          if (provider === 'chrome') {
+            console.warn('[YAIVS] Chrome summarizer failed, falling back to Gemini.', error);
+            activeProvider = 'gemini';
+            this.updateStatus('Chrome AI unavailable, falling back to Gemini…', 'loading');
+            this.setLoading(true, `Summarizing with ${this.getProviderLabel(activeProvider)}…`);
+            summary = await this.summarizeUsingProvider(activeProvider, transcript, durationSeconds);
+          } else {
+            throw error;
+          }
+        }
 
-        if (!response) throw new Error('No response from background service.');
-        if (response.status === 'error') throw new Error(response.message);
-
-        this.renderSummary(response.summary);
-        this.updateStatus(`Summary ready (${this.getProviderLabel(provider)}).`, 'success');
+        this.renderSummary(summary);
+        this.updateStatus(`Summary ready (${this.getProviderLabel(activeProvider)}).`, 'success');
       } catch (error) {
         console.error('Summary generation failed', error);
         this.renderSummary('');
@@ -717,6 +824,30 @@
       this.handleSummarize();
     }
 
+    async summarizeUsingProvider(provider, transcript, durationSeconds) {
+      if (provider === 'chrome') {
+        return this.chromeSummarizer.summarize(transcript, durationSeconds, progress => {
+          if (progress < 1) {
+            this.updateStatus(`Downloading Chrome AI model… ${Math.round(progress * 100)}%`, 'loading');
+          } else {
+            this.updateStatus('Summarizing with Chrome AI…', 'loading');
+          }
+        });
+      }
+
+      await ensureProviderKey(provider);
+      const response = await chrome.runtime.sendMessage({
+        type: 'summarizeVideo',
+        provider,
+        transcript,
+        durationSeconds
+      });
+
+      if (!response) throw new Error('No response from background service.');
+      if (response.status === 'error') throw new Error(response.message);
+      return response.summary;
+    }
+
     handleTimestampClick(event) {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
@@ -747,6 +878,8 @@
 
     getProviderLabel(provider) {
       switch (provider) {
+        case 'chrome':
+          return 'Chrome AI';
         case 'gpt':
           return 'GPT';
         case 'claude':
