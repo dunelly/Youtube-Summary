@@ -14,6 +14,13 @@
         padding: 16px;
         min-width: 220px;
       }
+      h2 {
+        margin: 16px 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
       h1 {
         margin: 0 0 12px;
         font-size: 15px;
@@ -25,10 +32,44 @@
         gap: 8px;
         font-weight: 500;
       }
+      .select-row {
+        justify-content: space-between;
+      }
+      select,
+      input[type="password"] {
+        flex: 1;
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(128, 128, 128, 0.4);
+        font: inherit;
+      }
+      select {
+        max-width: 140px;
+      }
+      .key-section {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 12px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+      }
+      .key-label {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .key-section.active {
+        border-color: rgba(62, 166, 255, 0.5);
+        background: rgba(62, 166, 255, 0.08);
+      }
       p {
         margin: 8px 0 0;
         font-size: 12px;
         color: rgba(128, 128, 128, 0.9);
+      }
+      .hint {
+        margin-top: 16px;
       }
     </style>
   </head>
@@ -39,6 +80,33 @@
       Auto summarize videos
     </label>
     <p id="status" aria-live="polite"></p>
+
+    <h2>Provider</h2>
+    <label class="select-row">
+      <span>Choose model</span>
+      <select id="provider">
+        <option value="gemini">Gemini</option>
+        <option value="gpt">GPT (OpenAI)</option>
+        <option value="claude">Claude (Anthropic)</option>
+      </select>
+    </label>
+
+    <section class="key-section">
+      <label class="key-label" for="geminiKey">Gemini API key</label>
+      <input type="password" id="geminiKey" placeholder="Paste Gemini key" autocomplete="off" />
+    </section>
+
+    <section class="key-section">
+      <label class="key-label" for="openaiKey">OpenAI API key</label>
+      <input type="password" id="openaiKey" placeholder="Paste OpenAI key" autocomplete="off" />
+    </section>
+
+    <section class="key-section">
+      <label class="key-label" for="claudeKey">Anthropic API key</label>
+      <input type="password" id="claudeKey" placeholder="Paste Claude key" autocomplete="off" />
+    </section>
+
+    <p class="hint">Keys are stored locally via Chrome sync.</p>
     <script src="popup.js" type="module"></script>
   </body>
 </html>
