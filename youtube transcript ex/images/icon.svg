@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#065fd4"/>
+  
+  <!-- Document icon -->
+  <path d="M40 32h48c2.2 0 4 1.8 4 4v56c0 2.2-1.8 4-4 4H40c-2.2 0-4-1.8-4-4V36c0-2.2 1.8-4 4-4z" fill="white"/>
+  
+  <!-- Lines representing text -->
+  <rect x="48" y="48" width="32" height="4" rx="2" fill="#065fd4"/>
+  <rect x="48" y="60" width="40" height="4" rx="2" fill="#065fd4"/>
+  <rect x="48" y="72" width="24" height="4" rx="2" fill="#065fd4"/>
+  
+  <!-- Copy symbol -->
+  <path d="M64 88l12-12h-8v-8h-8v8h-8l12 12z" fill="#065fd4"/>
+</svg> 

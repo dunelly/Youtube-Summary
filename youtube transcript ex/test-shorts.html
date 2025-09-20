@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>YouTube Shorts Transcript Extension Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #666;
+            margin-top: 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .test-url {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        ul {
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎬 YouTube Shorts Transcript Extension - Test Guide</h1>
+
+    <div class="test-section">
+        <h2>✅ Implementation Complete</h2>
+        <div class="status success">
+            Your YouTube Shorts transcript extraction fix has been successfully implemented!
+        </div>
+        <p>The extension now handles YouTube Shorts by:</p>
+        <ul>
+            <li>Detecting when you're on a Shorts page</li>
+            <li>Transforming the Shorts URL to a regular video URL</li>
+            <li>Fetching the transcript data from the regular video page</li>
+            <li>Extracting and formatting the transcript properly</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 How to Test</h2>
+        <ol>
+            <li><strong>Load the Extension:</strong>
+                <ul>
+                    <li>Open Chrome and go to <code>chrome://extensions/</code></li>
+                    <li>Enable "Developer mode" (toggle in top right)</li>
+                    <li>Click "Load unpacked"</li>
+                    <li>Select your extension folder</li>
+                </ul>
+            </li>
+            <li><strong>Test with a YouTube Short:</strong>
+                <ul>
+                    <li>Go to any YouTube Shorts video</li>
+                    <li>Example: <div class="test-url">https://www.youtube.com/shorts/VIDEO_ID</div></li>
+                    <li>Click the extension icon</li>
+                    <li>Click "Copy to Clipboard"</li>
+                </ul>
+            </li>
+            <li><strong>Verify Regular Videos Still Work:</strong>
+                <ul>
+                    <li>Go to a regular YouTube video</li>
+                    <li>Example: <div class="test-url">https://www.youtube.com/watch?v=VIDEO_ID</div></li>
+                    <li>Test that the extension still works normally</li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 What to Look For</h2>
+        <div class="status info">
+            Check the browser console (F12 → Console tab) for debugging messages
+        </div>
+        <p>When testing a YouTube Short, you should see:</p>
+        <ul>
+            <li>Console message: <code>"Transforming Shorts URL to regular video URL: https://www.youtube.com/watch?v=..."</code></li>
+            <li>The transcript should be successfully copied to your clipboard</li>
+            <li>The popup should show "Transcript copied!" in green</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>⚠️ Important Notes</h2>
+        <div class="status warning">
+            Not all YouTube Shorts have transcripts/captions available
+        </div>
+        <ul>
+            <li>If a Short doesn't have captions, you'll see: "Transcript not available for this Short"</li>
+            <li>This is normal - the video creator must enable captions for transcripts to be available</li>
+            <li>Try testing with multiple Shorts to find ones with captions</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🛠️ Troubleshooting</h2>
+        <p>If the extension doesn't work:</p>
+        <ol>
+            <li><strong>Reload the extension:</strong> Click the refresh button in <code>chrome://extensions/</code></li>
+            <li><strong>Check permissions:</strong> Ensure the extension has permission to access YouTube</li>
+            <li><strong>Refresh the YouTube page:</strong> After loading/updating the extension</li>
+            <li><strong>Check console for errors:</strong> Press F12 and look for red error messages</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Technical Details</h2>
+        <p>The implementation includes:</p>
+        <ul>
+            <li><strong>background.js:</strong> Added message handler for fetching transformed URLs</li>
+            <li><strong>content.js:</strong> Modified to detect Shorts and use URL transformation</li>
+            <li><strong>manifest.json:</strong> Already configured with proper permissions</li>
+        </ul>
+        <p>The solution works by leveraging the fact that every YouTube Short is also accessible as a regular video with the same video ID.</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+   "copyTranscript": {
+      "description": "Text shown in the extension button",
+      "message": "字幕をコピー"
+   },
+   "extensionDescription": {
+      "description": "Description of the extension",
+      "message": "ワンクリックでYouTube動画の字幕をコピーします。"
+   },
+   "extensionName": {
+      "description": "The name of the extension",
+      "message": "YouTube字幕をコピー"
+   },
+   "noVideoId": {
+      "description": "Error message when no video ID is found",
+      "message": "動画IDが見つかりません"
+   },
+   "transcriptCopied": {
+      "description": "Success message when transcript is copied",
+      "message": "字幕をコピーしました"
+   },
+   "transcriptError": {
+      "description": "Error message when transcript cannot be fetched",
+      "message": "字幕エラー"
+   },
+   "untitled": {
+      "description": "Default title when video title cannot be found",
+      "message": "無題"
+   }
+}
