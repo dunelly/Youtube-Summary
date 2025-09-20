@@ -677,14 +677,6 @@
           <span class="yaivs-spacer"></span>
           <button class="yaivs-button" type="button" id="yaivs-generate">Summarize</button>
         </header>
-        <div class="yaivs-presets" id="yaivs-presets" role="group" aria-label="Quick styles">
-          <button class="yaivs-chip" data-style="simple" type="button">Bullets</button>
-          <button class="yaivs-chip" data-style="detailed" type="button">Detailed</button>
-          <button class="yaivs-chip" data-style="chapters" type="button">Chapters</button>
-          <button class="yaivs-chip" data-style="proscons" type="button">Pros/Cons</button>
-          <button class="yaivs-chip" data-style="recipe" type="button">Recipe</button>
-          <button class="yaivs-chip" data-style="outline" type="button">Outline</button>
-        </div>
         <div class="yaivs-prompt" id="yaivs-prompt-row">
           <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video…" aria-label="Ask about this video" />
           <button class="yaivs-button" type="button" id="yaivs-ask">Ask</button>
@@ -702,7 +694,6 @@
       this.generateBtn = panel.querySelector('#yaivs-generate');
       this.promptInput = panel.querySelector('#yaivs-prompt-input');
       this.askBtn = panel.querySelector('#yaivs-ask');
-      this.presetRow = panel.querySelector('#yaivs-presets');
 
       if (this.generateHandler) {
         this.generateBtn.removeEventListener('click', this.generateHandler);
@@ -724,11 +715,6 @@
             this.handlePromptSubmit();
           }
         });
-      }
-
-      if (this.presetRow && !this.presetRow.dataset.bound) {
-        this.presetRow.addEventListener('click', e => this.handlePresetClick(e));
-        this.presetRow.dataset.bound = 'true';
       }
 
       if (!panel.dataset.listenersBound) {
@@ -785,7 +771,7 @@
       if (this.promptInput) this.promptInput.disabled = false;
     }
 
-    async handleSummarize(overrides) {
+    async handleSummarize() {
       if (!this.generateBtn || this.generateBtn.disabled) return;
 
       const videoId = this.transcriptService.getVideoId();
@@ -797,15 +783,14 @@
       try {
         await this.settings.ready;
         const provider = this.settings.get('provider') || 'gemini';
-        const selectedMode = overrides?.summaryMode || (this.settings.get('summaryMode') || 'simple');
-        const modeLabel = this.getModeLabel(selectedMode);
+        const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'simple');
         const { text: transcript, durationSeconds } = await this.transcriptService.collect();
         let activeProvider = provider;
         let summary;
 
         this.setLoading(true, `Summarizing (${modeLabel}) with ${this.getProviderLabel(provider)}…`);
 
-        summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds, overrides);
+        summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds);
 
         this.renderSummary(summary);
         this.updateStatus(`Summary ready (${this.getProviderLabel(activeProvider)} — ${modeLabel}).`, 'success');
@@ -861,15 +846,15 @@
       this.handleSummarize();
     }
 
-    async summarizeUsingProvider(provider, transcript, durationSeconds, overrides) {
+    async summarizeUsingProvider(provider, transcript, durationSeconds) {
       await ensureProviderKey(provider);
       const response = await chrome.runtime.sendMessage({
         type: 'summarizeVideo',
         provider,
         transcript,
         durationSeconds,
-        summaryMode: (overrides?.summaryMode) || (this.settings.get('summaryMode') || 'simple'),
-        customPrompt: (overrides?.customPrompt) || (this.settings.get('customPrompt') || '').trim()
+        summaryMode: this.settings.get('summaryMode') || 'simple',
+        customPrompt: (this.settings.get('customPrompt') || '').trim()
       });
 
       if (!response) throw new Error('No response from background service.');
@@ -1045,38 +1030,17 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-top: 6px;
       }
 
       .yaivs-input {
         flex: 1;
         min-width: 160px;
-        max-width: 820px;
-        padding: 8px 12px;
-        border-radius: 10px;
+        padding: 6px 10px;
+        border-radius: 14px;
         border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
-        background: var(--yt-spec-brand-background-primary, rgba(255, 255, 255, 0.06));
+        background: var(--yt-spec-general-background-a, rgba(255, 255, 255, 0.08));
         color: var(--yt-spec-text-primary, #0f0f0f);
         font: inherit;
-      }
-
-      .yaivs-presets {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin: 4px 0 6px;
-      }
-
-      .yaivs-chip {
-        padding: 4px 10px;
-        border-radius: 14px;
-        border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.12));
-        background: var(--yt-spec-general-background-a, rgba(255, 255, 255, 0.04));
-        color: var(--yt-spec-text-primary, #0f0f0f);
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.3px;
-        cursor: pointer;
       }
 
       .yaivs-status--loading,
@@ -1122,51 +1086,3 @@
   const transcriptService = new TranscriptService();
   new SummaryPanel(settingsManager, transcriptService);
 })();
-    handlePresetClick(event) {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      if (!target.classList.contains('yaivs-chip')) return;
-      const style = target.dataset.style;
-      const preset = this.getPreset(style);
-      if (!preset) return;
-      this.handleSummarize(preset);
-    }
-
-    getPreset(style) {
-      switch (style) {
-        case 'simple':
-          return { summaryMode: 'simple', customPrompt: '', label: 'Bullets' };
-        case 'detailed':
-          return { summaryMode: 'detailed', customPrompt: '', label: 'Detailed' };
-        case 'chapters':
-          return {
-            summaryMode: 'custom',
-            customPrompt:
-              'Summarize by chapters. For each chapter: use the chapter title as a heading with an emoji, then 2–4 bullets with timestamps for key points. If chapters are missing, approximate with sensible time ranges. Keep it concise.',
-            label: 'Chapters'
-          };
-        case 'proscons':
-          return {
-            summaryMode: 'custom',
-            customPrompt:
-              'Organize as two sections: "👍 Pros" and "👎 Cons". Under each, provide 3–6 concise bullets with timestamps where relevant. End with an "👉 Takeaway".',
-            label: 'Pros/Cons'
-          };
-        case 'recipe':
-          return {
-            summaryMode: 'custom',
-            customPrompt:
-              'Format as a recipe: Title, Ingredients (bulleted list), then Steps (numbered with concise instructions). Include timestamps for each step if applicable. Keep it factual and concise.',
-            label: 'Recipe'
-          };
-        case 'outline':
-          return {
-            summaryMode: 'custom',
-            customPrompt:
-              'Produce a structured outline: I., II., III. with nested bullets (A., 1.) where helpful. Include timestamps for key segments. Keep items under ~18 words.',
-            label: 'Outline'
-          };
-        default:
-          return null;
-      }
-    }
