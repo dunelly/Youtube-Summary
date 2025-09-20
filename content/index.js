@@ -672,10 +672,13 @@
       container.id = PANEL_ID;
       container.className = 'yaivs-panel';
       container.innerHTML = `
+        <div class="yaivs-prompt" id="yaivs-prompt-row">
+          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
+          <button class="yaivs-clear" type="button" id="yaivs-clear" aria-label="Clear">×</button>
+        </div>
         <header class="yaivs-panel__header">
           <span class="yaivs-spacer"></span>
-          <span class="yaivs-chip-mini" id="yaivs-provider">Gemini</span>
-          <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">Summarize</button>
+          <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">Ask/Summarize</button>
           <button class="yaivs-button yaivs-button--ghost yaivs-button--split" type="button" id="yaivs-style">▼</button>
         </header>
         <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
@@ -685,10 +688,6 @@
           <button type="button" data-style="proscons">Pros / Cons</button>
           <button type="button" data-style="recipe">Recipe</button>
           <button type="button" data-style="outline">Outline</button>
-        </div>
-        <div class="yaivs-prompt" id="yaivs-prompt-row">
-          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
-          <button class="yaivs-clear" type="button" id="yaivs-clear" aria-label="Clear">×</button>
         </div>
         <div class="yaivs-hint" id="yaivs-hint">Press Enter to ask</div>
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
@@ -709,7 +708,6 @@
       this.generateBtn = panel.querySelector('#yaivs-generate');
       this.promptInput = panel.querySelector('#yaivs-prompt-input');
       this.askBtn = null;
-      this.providerChip = panel.querySelector('#yaivs-provider');
       this.styleBtn = panel.querySelector('#yaivs-style');
       this.styleMenu = panel.querySelector('#yaivs-style-menu');
       this.clearBtn = panel.querySelector('#yaivs-clear');
@@ -763,7 +761,7 @@
       }
 
       this.updateInfoMessage();
-      this.updateProviderChip();
+      // no provider chip
     }
 
     ensureAboveDescription(container) {
@@ -879,7 +877,7 @@
     setLoading(isLoading, message) {
       if (!this.generateBtn) return;
       this.generateBtn.disabled = isLoading;
-      this.generateBtn.textContent = isLoading ? 'Summarizing…' : 'Summarize';
+      this.generateBtn.textContent = isLoading ? 'Working…' : 'Ask/Summarize';
       if (this.promptInput) this.promptInput.disabled = isLoading;
       if (message) {
         this.updateStatus(message, 'loading');
@@ -945,7 +943,6 @@
 
     handleSettingsChange(_values) {
       this.updateInfoMessage();
-      this.updateProviderChip();
     }
 
     getProviderLabel(provider) {
@@ -957,12 +954,6 @@
         default:
           return 'Gemini';
       }
-    }
-
-    updateProviderChip() {
-      if (!this.providerChip) return;
-      const provider = this.settings.get('provider') || 'gemini';
-      this.providerChip.textContent = this.getProviderLabel(provider);
     }
 
     toggleStyleMenu() {
@@ -1183,14 +1174,7 @@
         color: var(--yt-spec-text-secondary, #606060);
       }
 
-      .yaivs-chip-mini {
-        padding: 3px 8px;
-        border-radius: 12px;
-        border: 1px solid var(--yt-spec-badge-chip-background, rgba(0,0,0,0.12));
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--yt-spec-text-secondary, #606060);
-      }
+      /* provider chip removed */
 
       .yaivs-prompt {
         display: flex;
