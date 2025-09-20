@@ -2,7 +2,9 @@
   const PANEL_ID = 'yaivs-summary-panel';
   const STYLE_ID = 'yaivs-summary-styles';
   const YOUTUBE_TRANSCRIPT_ENDPOINT = 'https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false';
-  const AUTO_SUMMARIZE = true;
+  const DEFAULT_SETTINGS = {
+    autoSummarize: false
+  };
 
   // ---------- utility helpers ----------
   const DECODER = document.createElement('textarea');
@@ -632,6 +634,10 @@
       this.generateBtn = null;
       this.isSummarizing = false;
       this.autoTriggeredVideoId = null;
+      this.settings = { ...DEFAULT_SETTINGS };
+      this.settingsReady = this.loadSettings();
+      this.handleStorageChange = this.handleStorageChange.bind(this);
+      chrome.storage.onChanged.addListener(this.handleStorageChange);
       this.observeNavigation();
       this.setup();
     }
@@ -646,6 +652,8 @@
 
     async setup() {
       injectStyles();
+
+      await this.settingsReady;
 
       const mountPoint = await getPanelMountPoint();
       if (!mountPoint?.parent) {
@@ -710,14 +718,8 @@
         panel.addEventListener('click', event => this.handleTimestampClick(event));
         panel.dataset.timestampsBound = 'true';
       }
-      if (!panel.dataset.timestampsBound) {
-        panel.addEventListener('click', event => this.handleTimestampClick(event));
-        panel.dataset.timestampsBound = 'true';
-      }
 
-      if (AUTO_SUMMARIZE && this.statusEl && this.summaryEl?.hidden) {
-        this.updateStatus('Preparing summary…', 'loading');
-      }
+      this.updateInfoMessage();
     }
 
     resetState() {
@@ -728,15 +730,7 @@
         this.summaryEl.hidden = true;
       }
 
-      if (this.statusEl) {
-        if (AUTO_SUMMARIZE) {
-          this.statusEl.textContent = 'Preparing summary…';
-          this.statusEl.className = 'yaivs-status yaivs-status--loading';
-        } else {
-          this.statusEl.textContent = 'Click to summarize the current video.';
-          this.statusEl.className = 'yaivs-status yaivs-status--info';
-        }
-      }
+      this.updateInfoMessage();
 
       if (this.generateBtn) {
         this.generateBtn.disabled = false;
@@ -818,8 +812,10 @@
       }
     }
 
-    maybeAutoSummarize() {
-      if (!AUTO_SUMMARIZE) {
+    async maybeAutoSummarize() {
+      await this.settingsReady;
+
+      if (!this.settings.autoSummarize) {
         return;
       }
 
@@ -829,6 +825,10 @@
       }
 
       if (this.generateBtn?.disabled || this.isSummarizing) {
+        return;
+      }
+
+      if (!this.summaryEl?.hidden) {
         return;
       }
 
@@ -858,6 +858,66 @@
 
       video.currentTime = seconds;
       video.focus?.();
+    }
+
+    async loadSettings() {
+      try {
+        const stored = await chrome.storage.sync.get(['autoSummarize']);
+        if (Object.prototype.hasOwnProperty.call(stored, 'autoSummarize')) {
+          this.settings.autoSummarize = Boolean(stored.autoSummarize);
+        }
+      } catch (error) {
+        console.warn('[YAIVS] Failed to load settings', error);
+      }
+      return this.settings;
+    }
+
+    handleStorageChange(changes, area) {
+      if (area !== 'sync') {
+        return;
+      }
+
+      let updated = false;
+      if (Object.prototype.hasOwnProperty.call(changes, 'autoSummarize')) {
+        this.settings.autoSummarize = Boolean(changes.autoSummarize.newValue);
+        updated = true;
+      }
+
+      if (!updated) {
+        return;
+      }
+
+      this.settingsReady = Promise.resolve(this.settings);
+      if (!this.isSummarizing && this.summaryEl?.hidden) {
+        this.updateInfoMessage();
+      }
+
+      if (this.settings.autoSummarize) {
+        this.autoTriggeredVideoId = null;
+        this.maybeAutoSummarize();
+      }
+    }
+
+    updateInfoMessage() {
+      if (!this.statusEl) {
+        return;
+      }
+
+      if (this.isSummarizing) {
+        return;
+      }
+
+      if (!this.summaryEl?.hidden) {
+        return;
+      }
+
+      if (this.settings.autoSummarize) {
+        this.statusEl.textContent = 'Preparing summary…';
+        this.statusEl.className = 'yaivs-status yaivs-status--loading';
+      } else {
+        this.statusEl.textContent = 'Click to summarize the current video.';
+        this.statusEl.className = 'yaivs-status yaivs-status--info';
+      }
     }
   }
 

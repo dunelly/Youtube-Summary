@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI Summary Settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        min-width: 220px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+      }
+      p {
+        margin: 8px 0 0;
+        font-size: 12px;
+        color: rgba(128, 128, 128, 0.9);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AI Summary</h1>
+    <label>
+      <input type="checkbox" id="autoSummarize" />
+      Auto summarize videos
+    </label>
+    <p id="status" aria-live="polite"></p>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>
