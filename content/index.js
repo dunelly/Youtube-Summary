@@ -673,11 +673,10 @@
       container.className = 'yaivs-panel';
       container.innerHTML = `
         <header class="yaivs-panel__header">
-          <h2 class="yaivs-panel__title">AI Summary</h2>
           <span class="yaivs-spacer"></span>
           <span class="yaivs-chip-mini" id="yaivs-provider">Gemini</span>
-          <button class="yaivs-button" type="button" id="yaivs-generate">Summarize</button>
-          <button class="yaivs-button yaivs-button--ghost" type="button" id="yaivs-style">▼</button>
+          <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">Summarize</button>
+          <button class="yaivs-button yaivs-button--ghost yaivs-button--split" type="button" id="yaivs-style">▼</button>
         </header>
         <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
           <button type="button" data-style="simple">Bullets</button>
@@ -688,9 +687,8 @@
           <button type="button" data-style="outline">Outline</button>
         </div>
         <div class="yaivs-prompt" id="yaivs-prompt-row">
-          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video…" aria-label="Ask about this video" />
+          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
           <button class="yaivs-clear" type="button" id="yaivs-clear" aria-label="Clear">×</button>
-          <button class="yaivs-button yaivs-button--ghost" type="button" id="yaivs-ask">Ask</button>
         </div>
         <div class="yaivs-hint" id="yaivs-hint">Press Enter to ask</div>
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
@@ -710,7 +708,7 @@
       this.statusEl = panel.querySelector('#yaivs-status');
       this.generateBtn = panel.querySelector('#yaivs-generate');
       this.promptInput = panel.querySelector('#yaivs-prompt-input');
-      this.askBtn = panel.querySelector('#yaivs-ask');
+      this.askBtn = null;
       this.providerChip = panel.querySelector('#yaivs-provider');
       this.styleBtn = panel.querySelector('#yaivs-style');
       this.styleMenu = panel.querySelector('#yaivs-style-menu');
@@ -725,13 +723,7 @@
       this.generateHandler = () => this.handleSummarize();
       this.generateBtn.addEventListener('click', this.generateHandler);
 
-      if (this.askHandler && this.askBtn) {
-        this.askBtn.removeEventListener('click', this.askHandler);
-      }
-      if (this.askBtn) {
-        this.askHandler = () => this.handlePromptSubmit();
-        this.askBtn.addEventListener('click', this.askHandler);
-      }
+      // Ask button removed; Enter in input submits.
       if (this.promptInput) {
         this.promptInput.addEventListener('keydown', e => {
           if (e.key === 'Enter' && !e.shiftKey) {
@@ -816,7 +808,7 @@
         this.generateBtn.disabled = false;
         this.generateBtn.textContent = 'Summarize';
       }
-      if (this.askBtn) this.askBtn.disabled = false;
+      // no separate ask button
       if (this.promptInput) this.promptInput.disabled = false;
       if (this.toolsRow) this.toolsRow.hidden = true;
       this.lastRawSummary = '';
@@ -824,6 +816,13 @@
 
     async handleSummarize(overrides) {
       if (!this.generateBtn || this.generateBtn.disabled) return;
+
+      // Combined behavior: if there's a question typed, treat as Ask.
+      const q = (this.promptInput?.value || '').trim();
+      if (q) {
+        this.handlePromptSubmit();
+        return;
+      }
 
       const videoId = this.transcriptService.getVideoId();
       if (videoId) this.autoTriggeredVideoId = videoId;
@@ -881,7 +880,6 @@
       if (!this.generateBtn) return;
       this.generateBtn.disabled = isLoading;
       this.generateBtn.textContent = isLoading ? 'Summarizing…' : 'Summarize';
-      if (this.askBtn) this.askBtn.disabled = isLoading;
       if (this.promptInput) this.promptInput.disabled = isLoading;
       if (message) {
         this.updateStatus(message, 'loading');
@@ -1146,9 +1144,26 @@
         flex-shrink: 0;
       }
 
+      .yaivs-button--primary {
+        background: var(--yt-spec-call-to-action, #3ea6ff);
+        color: #0b0b0b;
+        border-color: transparent;
+      }
+
       .yaivs-button--ghost {
         background: transparent;
         border-color: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.12));
+      }
+
+      /* Split button appearance */
+      #yaivs-generate {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+      #yaivs-style {
+        margin-left: -1px;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
       }
 
       .yaivs-button:hover:enabled {
@@ -1220,11 +1235,12 @@
         flex-direction: column;
         gap: 4px;
         padding: 8px;
-        border: 1px solid var(--yt-spec-badge-chip-background, rgba(0,0,0,0.12));
-        background: var(--yt-spec-general-background-a, rgba(255,255,255,0.98));
-        color: var(--yt-spec-text-primary, #0f0f0f);
+        border: 1px solid var(--yt-spec-badge-chip-background, rgba(255,255,255,0.12));
+        background: var(--yt-spec-general-background-b, rgba(32,32,32,0.98));
+        color: var(--yt-spec-text-primary, #eaeaea);
         border-radius: 8px;
-        z-index: 10;
+        z-index: 9999;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.35);
       }
 
       .yaivs-style-menu > button {
@@ -1238,7 +1254,7 @@
         cursor: pointer;
       }
 
-      .yaivs-style-menu > button:hover { background: rgba(0,0,0,0.06); }
+      .yaivs-style-menu > button:hover { background: rgba(255,255,255,0.08); }
 
       .yaivs-status--loading,
       .yaivs-status--success {
