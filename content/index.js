@@ -569,6 +569,7 @@
         .map(segment => (segment.label ? `${segment.label} ${segment.text}` : segment.text))
         .join('\n')
         .trim();
+
       if (!text) {
         throw new Error('No transcript available for this video.');
       }
@@ -577,8 +578,16 @@
         throw new Error('Transcript requires you to sign in to YouTube.');
       }
 
-      this.cache.set(videoId, text);
-      return text;
+      const durationSeconds = segments.reduce((max, segment) => {
+        if (typeof segment.seconds === 'number') {
+          return Math.max(max, segment.seconds);
+        }
+        return max;
+      }, 0);
+
+      const result = { text, durationSeconds };
+      this.cache.set(videoId, result);
+      return result;
     }
   }
 
@@ -724,12 +733,13 @@
 
       try {
         await ensureGeminiKey();
-        const transcript = await this.collector.collect();
+        const { text: transcript, durationSeconds } = await this.collector.collect();
         this.setLoading(true, 'Summarizing highlights…');
 
         const response = await chrome.runtime.sendMessage({
           type: 'summarizeWithGemini',
-          transcript
+          transcript,
+          durationSeconds
         });
 
         if (!response) {
