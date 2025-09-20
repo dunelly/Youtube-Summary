@@ -675,14 +675,31 @@
         <header class="yaivs-panel__header">
           <h2 class="yaivs-panel__title">AI Summary</h2>
           <span class="yaivs-spacer"></span>
+          <span class="yaivs-chip-mini" id="yaivs-provider">Gemini</span>
           <button class="yaivs-button" type="button" id="yaivs-generate">Summarize</button>
+          <button class="yaivs-button yaivs-button--ghost" type="button" id="yaivs-style">▼</button>
         </header>
+        <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
+          <button type="button" data-style="simple">Bullets</button>
+          <button type="button" data-style="detailed">Detailed</button>
+          <button type="button" data-style="chapters">Chapters</button>
+          <button type="button" data-style="proscons">Pros / Cons</button>
+          <button type="button" data-style="recipe">Recipe</button>
+          <button type="button" data-style="outline">Outline</button>
+        </div>
         <div class="yaivs-prompt" id="yaivs-prompt-row">
           <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video…" aria-label="Ask about this video" />
-          <button class="yaivs-button" type="button" id="yaivs-ask">Ask</button>
+          <button class="yaivs-clear" type="button" id="yaivs-clear" aria-label="Clear">×</button>
+          <button class="yaivs-button yaivs-button--ghost" type="button" id="yaivs-ask">Ask</button>
         </div>
+        <div class="yaivs-hint" id="yaivs-hint">Press Enter to ask</div>
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
-        <div class="yaivs-summary" id="yaivs-summary" hidden></div>
+        <div class="yaivs-tools" id="yaivs-tools" hidden>
+          <button type="button" id="yaivs-copy" class="yaivs-tool">Copy</button>
+          <span class="yaivs-divider"></span>
+          <button type="button" id="yaivs-toggle" class="yaivs-tool">Expand</button>
+        </div>
+        <div class="yaivs-summary collapsed" id="yaivs-summary" hidden></div>
       `;
       return container;
     }
@@ -694,6 +711,13 @@
       this.generateBtn = panel.querySelector('#yaivs-generate');
       this.promptInput = panel.querySelector('#yaivs-prompt-input');
       this.askBtn = panel.querySelector('#yaivs-ask');
+      this.providerChip = panel.querySelector('#yaivs-provider');
+      this.styleBtn = panel.querySelector('#yaivs-style');
+      this.styleMenu = panel.querySelector('#yaivs-style-menu');
+      this.clearBtn = panel.querySelector('#yaivs-clear');
+      this.toolsRow = panel.querySelector('#yaivs-tools');
+      this.copyBtn = panel.querySelector('#yaivs-copy');
+      this.toggleBtn = panel.querySelector('#yaivs-toggle');
 
       if (this.generateHandler) {
         this.generateBtn.removeEventListener('click', this.generateHandler);
@@ -722,7 +746,32 @@
         panel.dataset.listenersBound = 'true';
       }
 
+      if (this.styleBtn && this.styleMenu && !this.styleBtn.dataset.bound) {
+        this.styleBtn.dataset.bound = 'true';
+        this.styleBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          this.toggleStyleMenu();
+        });
+        document.addEventListener('click', () => this.hideStyleMenu());
+        this.styleMenu.addEventListener('click', e => this.handleStyleMenuClick(e));
+      }
+
+      if (this.clearBtn) {
+        this.clearBtn.addEventListener('click', () => {
+          if (this.promptInput) this.promptInput.value = '';
+          this.promptInput?.focus();
+        });
+      }
+
+      if (this.copyBtn) {
+        this.copyBtn.addEventListener('click', () => this.copySummary());
+      }
+      if (this.toggleBtn) {
+        this.toggleBtn.addEventListener('click', () => this.toggleExpand());
+      }
+
       this.updateInfoMessage();
+      this.updateProviderChip();
     }
 
     ensureAboveDescription(container) {
@@ -769,9 +818,11 @@
       }
       if (this.askBtn) this.askBtn.disabled = false;
       if (this.promptInput) this.promptInput.disabled = false;
+      if (this.toolsRow) this.toolsRow.hidden = true;
+      this.lastRawSummary = '';
     }
 
-    async handleSummarize() {
+    async handleSummarize(overrides) {
       if (!this.generateBtn || this.generateBtn.disabled) return;
 
       const videoId = this.transcriptService.getVideoId();
@@ -783,14 +834,15 @@
       try {
         await this.settings.ready;
         const provider = this.settings.get('provider') || 'gemini';
-        const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'simple');
+        const selectedMode = (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'simple');
+        const modeLabel = this.getModeLabel(selectedMode);
         const { text: transcript, durationSeconds } = await this.transcriptService.collect();
         let activeProvider = provider;
         let summary;
 
         this.setLoading(true, `Summarizing (${modeLabel}) with ${this.getProviderLabel(provider)}…`);
 
-        summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds);
+        summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds, overrides);
 
         this.renderSummary(summary);
         this.updateStatus(`Summary ready (${this.getProviderLabel(activeProvider)} — ${modeLabel}).`, 'success');
@@ -813,8 +865,10 @@
         this.summaryEl.innerHTML = '';
         return;
       }
+      this.lastRawSummary = text;
       this.summaryEl.innerHTML = formatSummaryHtml(text);
       this.summaryEl.hidden = false;
+      if (this.toolsRow) this.toolsRow.hidden = false;
     }
 
     updateStatus(message, variant) {
@@ -846,15 +900,15 @@
       this.handleSummarize();
     }
 
-    async summarizeUsingProvider(provider, transcript, durationSeconds) {
+    async summarizeUsingProvider(provider, transcript, durationSeconds, overrides) {
       await ensureProviderKey(provider);
       const response = await chrome.runtime.sendMessage({
         type: 'summarizeVideo',
         provider,
         transcript,
         durationSeconds,
-        summaryMode: this.settings.get('summaryMode') || 'simple',
-        customPrompt: (this.settings.get('customPrompt') || '').trim()
+        summaryMode: (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'simple'),
+        customPrompt: (overrides && overrides.customPrompt) || (this.settings.get('customPrompt') || '').trim()
       });
 
       if (!response) throw new Error('No response from background service.');
@@ -893,6 +947,7 @@
 
     handleSettingsChange(_values) {
       this.updateInfoMessage();
+      this.updateProviderChip();
     }
 
     getProviderLabel(provider) {
@@ -903,6 +958,87 @@
           return 'Claude';
         default:
           return 'Gemini';
+      }
+    }
+
+    updateProviderChip() {
+      if (!this.providerChip) return;
+      const provider = this.settings.get('provider') || 'gemini';
+      this.providerChip.textContent = this.getProviderLabel(provider);
+    }
+
+    toggleStyleMenu() {
+      if (!this.styleMenu) return;
+      const isHidden = this.styleMenu.hasAttribute('hidden');
+      if (isHidden) this.styleMenu.removeAttribute('hidden');
+      else this.styleMenu.setAttribute('hidden', '');
+    }
+
+    hideStyleMenu() {
+      if (this.styleMenu) this.styleMenu.setAttribute('hidden', '');
+    }
+
+    handleStyleMenuClick(event) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.tagName !== 'BUTTON') return;
+      const style = target.dataset.style;
+      const preset = this.getPreset(style);
+      if (!preset) return;
+      this.hideStyleMenu();
+      this.handleSummarize(preset);
+    }
+
+    copySummary() {
+      const text = this.lastRawSummary || this.summaryEl?.textContent || '';
+      if (!text) return;
+      navigator.clipboard?.writeText(text).then(() => {
+        this.updateStatus('Copied to clipboard.', 'success');
+      }).catch(() => {
+        this.updateStatus('Copy failed.', 'error');
+      });
+    }
+
+    toggleExpand() {
+      if (!this.summaryEl || !this.toggleBtn) return;
+      const wasCollapsed = this.summaryEl.classList.contains('collapsed');
+      if (wasCollapsed) this.summaryEl.classList.remove('collapsed');
+      else this.summaryEl.classList.add('collapsed');
+      this.toggleBtn.textContent = wasCollapsed ? 'Collapse' : 'Expand';
+    }
+
+    getPreset(style) {
+      switch (style) {
+        case 'simple':
+          return { summaryMode: 'simple', customPrompt: '' };
+        case 'detailed':
+          return { summaryMode: 'detailed', customPrompt: '' };
+        case 'chapters':
+          return {
+            summaryMode: 'custom',
+            customPrompt:
+              'Summarize by chapters. For each chapter: use the chapter title as a heading with an emoji, then 2–4 bullets with timestamps for key points. If chapters are missing, approximate with sensible time ranges. Keep it concise.'
+          };
+        case 'proscons':
+          return {
+            summaryMode: 'custom',
+            customPrompt:
+              'Organize as two sections: "👍 Pros" and "👎 Cons". Under each, provide 3–6 concise bullets with timestamps where relevant. End with an "👉 Takeaway".'
+          };
+        case 'recipe':
+          return {
+            summaryMode: 'custom',
+            customPrompt:
+              'Format as a recipe: Title, Ingredients (bulleted list), then Steps (numbered with concise instructions). Include timestamps for each step if applicable. Keep it factual and concise.'
+          };
+        case 'outline':
+          return {
+            summaryMode: 'custom',
+            customPrompt:
+              'Produce a structured outline: I., II., III. with nested bullets (A., 1.) where helpful. Include timestamps for key segments. Keep items under ~18 words.'
+          };
+          default:
+            return null;
       }
     }
 
@@ -974,6 +1110,7 @@
         display: flex;
         flex-direction: column;
         gap: 10px;
+        position: relative;
       }
 
       .yaivs-panel__header {
@@ -1009,6 +1146,11 @@
         flex-shrink: 0;
       }
 
+      .yaivs-button--ghost {
+        background: transparent;
+        border-color: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.12));
+      }
+
       .yaivs-button:hover:enabled {
         background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.08));
       }
@@ -1026,22 +1168,77 @@
         color: var(--yt-spec-text-secondary, #606060);
       }
 
+      .yaivs-chip-mini {
+        padding: 3px 8px;
+        border-radius: 12px;
+        border: 1px solid var(--yt-spec-badge-chip-background, rgba(0,0,0,0.12));
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--yt-spec-text-secondary, #606060);
+      }
+
       .yaivs-prompt {
         display: flex;
         align-items: center;
         gap: 8px;
+        margin-top: 6px;
       }
 
       .yaivs-input {
         flex: 1;
         min-width: 160px;
-        padding: 6px 10px;
-        border-radius: 14px;
+        max-width: 820px;
+        padding: 8px 12px;
+        border-radius: 10px;
         border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
-        background: var(--yt-spec-general-background-a, rgba(255, 255, 255, 0.08));
+        background: var(--yt-spec-brand-background-primary, rgba(255, 255, 255, 0.06));
         color: var(--yt-spec-text-primary, #0f0f0f);
         font: inherit;
       }
+
+      .yaivs-clear {
+        border: none;
+        background: transparent;
+        color: var(--yt-spec-text-secondary, #606060);
+        font-size: 18px;
+        line-height: 1;
+        padding: 0 6px;
+        cursor: pointer;
+      }
+
+      .yaivs-hint {
+        margin: -4px 0 0;
+        font-size: 11px;
+        color: var(--yt-spec-text-secondary, #606060);
+      }
+
+      .yaivs-style-menu {
+        position: absolute;
+        right: 0;
+        top: 38px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px;
+        border: 1px solid var(--yt-spec-badge-chip-background, rgba(0,0,0,0.12));
+        background: var(--yt-spec-general-background-a, rgba(255,255,255,0.98));
+        color: var(--yt-spec-text-primary, #0f0f0f);
+        border-radius: 8px;
+        z-index: 10;
+      }
+
+      .yaivs-style-menu > button {
+        border: none;
+        background: transparent;
+        text-align: left;
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .yaivs-style-menu > button:hover { background: rgba(0,0,0,0.06); }
 
       .yaivs-status--loading,
       .yaivs-status--success {
@@ -1063,6 +1260,28 @@
         white-space: normal;
         color: var(--yt-spec-text-primary, #0f0f0f);
       }
+
+      .yaivs-summary.collapsed {
+        max-height: 360px;
+        overflow: hidden;
+      }
+
+      .yaivs-tools {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .yaivs-tool {
+        border: none;
+        background: transparent;
+        color: var(--yt-spec-text-secondary, #606060);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .yaivs-divider { width: 1px; height: 16px; background: var(--yt-spec-10-percent-layer, rgba(0,0,0,0.1)); display: inline-block; }
 
       .yaivs-summary .yaivs-timestamp {
         color: var(--yt-spec-call-to-action, #3ea6ff);
