@@ -92,6 +92,34 @@ function buildTimeHints(total) {
   ].join('\n');
 }
 
+async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, question }) {
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey']);
+  const prompt = buildQuestionPrompt(question, durationSeconds);
+  const userText = [prompt, '', 'Transcript:', transcript].join('\n');
+
+  switch (provider) {
+    case 'gpt':
+      return summarizeWithOpenAI(userText, settings.openaiKey);
+    case 'claude':
+      return summarizeWithAnthropic(userText, settings.claudeKey);
+    default:
+      return summarizeWithGemini(userText, settings.geminiKey);
+  }
+}
+
+function buildQuestionPrompt(question, durationSeconds) {
+  const q = (question || '').toString().trim();
+  const total = Number(durationSeconds) || 0;
+  const timeHint = total > 0 ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when citing specific moments.' : '';
+  const lines = [
+    'You are answering a user question using ONLY the YouTube video transcript provided below.',
+    `Question: ${q}`,
+    'Give a clear, concise answer grounded in the transcript. If not answerable, say "Not found in transcript."',
+    timeHint
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
 function formatTimestamp(totalSeconds) {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
     return '00:00';
@@ -248,6 +276,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     summarizeVideo(request)
+      .then(summary => sendResponse({ status: 'ok', summary }))
+      .catch(error => sendResponse({ status: 'error', message: error.message }));
+    return true;
+  }
+
+  if (request?.type === 'askVideo') {
+    askVideo(request)
       .then(summary => sendResponse({ status: 'ok', summary }))
       .catch(error => sendResponse({ status: 'error', message: error.message }));
     return true;

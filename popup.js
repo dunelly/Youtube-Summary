@@ -1,7 +1,7 @@
 const toggle = document.getElementById('autoSummarize');
 const providerSelect = document.getElementById('provider');
 const statusEl = document.getElementById('status');
-const chromeLanguageSelect = document.getElementById('chromeLanguage');
+// Chrome on-device summarizer removed; no language selector.
 const summaryModeSelect = document.getElementById('summaryMode');
 const customPromptContainer = document.getElementById('customPromptContainer');
 const customPromptTextarea = document.getElementById('customPrompt');
@@ -11,7 +11,7 @@ const keyInputs = {
   claude: document.getElementById('claudeKey')
 };
 const keySections = Array.from(document.querySelectorAll('.key-section'));
-const VALID_CHROME_LANGUAGES = ['en', 'es', 'ja'];
+// No Chrome language list needed.
 const defaultPlaceholders = {
   gemini: keyInputs.gemini.placeholder,
   gpt: keyInputs.gpt.placeholder,
@@ -26,20 +26,12 @@ async function load() {
       'geminiKey',
       'openaiKey',
       'claudeKey',
-      'chromeOutputLanguage',
       'summaryMode',
       'customPrompt'
     ]);
 
     toggle.checked = Boolean(stored.autoSummarize);
-    providerSelect.value = stored.provider || 'chrome';
-
-    if (chromeLanguageSelect) {
-      const storedLanguage = VALID_CHROME_LANGUAGES.includes(stored.chromeOutputLanguage)
-        ? stored.chromeOutputLanguage
-        : 'en';
-      chromeLanguageSelect.value = storedLanguage;
-    }
+    providerSelect.value = stored.provider || 'gemini';
 
     keyInputs.gemini.value = stored.geminiKey || '';
     keyInputs.gpt.value = stored.openaiKey || '';
@@ -57,7 +49,7 @@ async function load() {
 
     updateStatus(toggle.checked);
     highlightActiveKey();
-    updateLanguageState();
+    // No chrome language state
 
     // Ensure we have persistent access to youtube.com (requests once, then persists).
     await ensureYouTubePermission();
@@ -78,12 +70,7 @@ function highlightActiveKey() {
   const provider = providerSelect.value;
   keySections.forEach(section => {
     const sectionProvider = section.dataset.provider;
-    if (provider === 'chrome') {
-      section.classList.remove('active');
-      const input = section.querySelector('input');
-      input.disabled = true;
-      input.placeholder = `${defaultPlaceholders[sectionProvider]} (not required for Chrome AI)`;
-    } else if (sectionProvider === provider) {
+    if (sectionProvider === provider) {
       section.classList.add('active');
       const input = section.querySelector('input');
       input.disabled = false;
@@ -95,13 +82,7 @@ function highlightActiveKey() {
       input.placeholder = defaultPlaceholders[sectionProvider];
     }
   });
-  if (provider === 'chrome') {
-    statusEl.textContent = `${toggle.checked ? 'Summaries run automatically.' : 'Click the in-page button to summarize.'} (No API key required for Chrome AI.)`;
-  } else {
-    updateStatus(toggle.checked);
-  }
-
-  updateLanguageState();
+  updateStatus(toggle.checked);
 }
 
 toggle.addEventListener('change', () => {
@@ -145,15 +126,7 @@ if (customPromptTextarea) {
   customPromptTextarea.addEventListener('blur', handler);
 }
 
-if (chromeLanguageSelect) {
-  chromeLanguageSelect.addEventListener('change', () => {
-    const selection = chromeLanguageSelect.value;
-    const value = VALID_CHROME_LANGUAGES.includes(selection) ? selection : 'en';
-    chrome.storage.sync
-      .set({ chromeOutputLanguage: value })
-      .catch(error => console.error('[YAIVS] Failed to save Chrome language preference', error));
-  });
-}
+// No Chrome language selection
 
 Object.entries(keyInputs).forEach(([provider, input]) => {
   input.addEventListener('change', () => {
@@ -167,21 +140,7 @@ Object.entries(keyInputs).forEach(([provider, input]) => {
 
 load();
 
-function updateLanguageState() {
-  if (!chromeLanguageSelect) return;
-  const provider = providerSelect.value;
-  const isChrome = provider === 'chrome';
-  chromeLanguageSelect.disabled = !isChrome;
-  const label = chromeLanguageSelect.closest('label');
-  if (!label) return;
-  if (isChrome) {
-    label.removeAttribute('aria-disabled');
-    label.classList.remove('disabled');
-  } else {
-    label.setAttribute('aria-disabled', 'true');
-    label.classList.add('disabled');
-  }
-}
+// No language state toggling needed.
 
 function toggleCustomPromptVisibility() {
   if (!customPromptContainer || !summaryModeSelect) return;

@@ -100,7 +100,6 @@
     <label class="select-row">
       <span>Choose model</span>
       <select id="provider">
-        <option value="chrome">Chrome AI (on-device)</option>
         <option value="gemini">Gemini</option>
         <option value="gpt">GPT (OpenAI)</option>
         <option value="claude">Claude (Anthropic)</option>
@@ -121,14 +120,7 @@
       <textarea id="customPrompt" placeholder="Describe how the summary should be generated"></textarea>
     </div>
 
-    <label class="select-row">
-      <span>Chrome language</span>
-      <select id="chromeLanguage">
-        <option value="en">English</option>
-        <option value="es">Spanish</option>
-        <option value="ja">Japanese</option>
-      </select>
-    </label>
+    <!-- Chrome on-device summarizer removed for performance; language selector omitted. -->
 
     <section class="key-section" data-provider="gemini">
       <label class="key-label" for="geminiKey">Gemini API key</label>
