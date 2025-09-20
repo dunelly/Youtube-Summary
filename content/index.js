@@ -44,9 +44,9 @@
     });
   }
 
-  async function getMetadataContainer() {
+  async function getPanelMountPoint() {
     const selectors = [
-      '#primary-inner ytd-watch-metadata',
+      '#primary ytd-watch-metadata',
       'ytd-watch-metadata',
       '#info-contents',
       '#primary-inner',
@@ -57,17 +57,23 @@
     await waitForElement(combinedSelector, 10000).catch(() => null);
 
     for (const selector of selectors) {
-      const match = document.querySelector(selector);
-      if (match) {
-        return match;
+      const container = document.querySelector(selector);
+      if (!container) {
+        continue;
       }
+
+      const description = container.querySelector?.('#description');
+      if (description?.parentElement) {
+        return { parent: description.parentElement, anchor: description };
+      }
+
+      return {
+        parent: container,
+        anchor: container.firstElementChild || null
+      };
     }
 
     return null;
-  }
-
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   function decodeHtmlEntities(text) {
@@ -78,6 +84,52 @@
 
   function normalizeWhitespace(text) {
     return text ? text.replace(/\s+/g, ' ').trim() : '';
+  }
+
+  function escapeHtml(text) {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function formatSummaryHtml(summary) {
+    if (!summary) return '';
+
+    const escaped = escapeHtml(summary);
+    const withLinks = escaped.replace(/\[(\d{1,3}):(\d{2})(?::(\d{2}))?\]/g, (match, part1, part2, part3) => {
+      const first = Number(part1);
+      const second = Number(part2);
+      const third = typeof part3 !== 'undefined' ? Number(part3) : null;
+      let seconds = first * 60 + second;
+
+      if (third !== null) {
+        seconds = first * 3600 + second * 60 + third;
+      }
+
+      if (!Number.isFinite(seconds)) {
+        return match;
+      }
+
+      return `<a href="#" class="yaivs-timestamp" data-seconds="${seconds}">${match}</a>`;
+    });
+
+    return withLinks.replace(/\n/g, '<br>');
+  }
+
+  async function parseJsonResponse(response, contextLabel) {
+    const text = await response.text();
+    if (!text) {
+      console.debug('[YAIVS] empty response body', contextLabel);
+      return null;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      console.debug('[YAIVS] failed to parse JSON', contextLabel, error.message);
+      return null;
+    }
   }
 
   function containsAuthMessage(text) {
@@ -127,16 +179,90 @@
   }
 
   // ---------- transcript helpers ----------
-  async function fetchTranscriptLines(videoUrl) {
+  function parseTimestampToSeconds(raw) {
+    if (!raw || typeof raw !== 'string') {
+      return null;
+    }
+    const parts = raw.split(':').map(part => part.trim()).filter(Boolean);
+    if (parts.length === 0) {
+      return null;
+    }
+    const numbers = parts.map(Number);
+    if (numbers.some(Number.isNaN)) {
+      return null;
+    }
+    if (numbers.length === 3) {
+      return numbers[0] * 3600 + numbers[1] * 60 + numbers[2];
+    }
+    if (numbers.length === 2) {
+      return numbers[0] * 60 + numbers[1];
+    }
+    if (numbers.length === 1) {
+      return numbers[0];
+    }
+    return null;
+  }
+
+  function formatSecondsToLabel(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return '';
+    }
+
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    if (hrs > 0) {
+      return `[${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}]`;
+    }
+
+    const totalMins = Math.floor(seconds / 60);
+    return `[${totalMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}]`;
+  }
+
+  function selectCaptionTrack(tracks) {
+    if (!Array.isArray(tracks) || tracks.length === 0) {
+      return null;
+    }
+    return tracks.find(track => track.kind !== 'asr') || tracks[0];
+  }
+
+  function ensureJson3(url) {
+    if (!url) return null;
+    return url.includes('fmt=json3') ? url : `${url}&fmt=json3`;
+  }
+
+  async function fetchCaptionEvents(baseUrl) {
+    const url = ensureJson3(baseUrl);
+    if (!url) return [];
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Transcript request failed (${res.status})`);
+    }
+    const json = await parseJsonResponse(res, 'caption-track');
+    return json?.events || [];
+  }
+
+  async function fetchTranscriptSegments(videoUrl) {
     const transcriptData = await getTranscriptDict(videoUrl);
     if (!transcriptData?.transcript || transcriptData.transcript.length === 0) {
       return [];
     }
-    const lines = transcriptData.transcript
-      .map(([, text]) => normalizeWhitespace(text))
+
+    const segments = transcriptData.transcript
+      .map(([timestamp, text]) => {
+        const clean = normalizeWhitespace(text);
+        if (!clean) {
+          return null;
+        }
+        const seconds = parseTimestampToSeconds(timestamp);
+        const label = seconds !== null ? formatSecondsToLabel(seconds) : '';
+        return { seconds, label, text: clean };
+      })
       .filter(Boolean);
-    console.debug('[YAIVS] transcript lines preview', lines.slice(0, 5));
-    return lines;
+
+    console.debug('[YAIVS] transcript segments preview', segments.slice(0, 3));
+    return segments;
   }
 
   async function getTranscriptDict(videoUrl) {
@@ -152,14 +278,14 @@
     if (isShorts) {
       const transformedUrl = `https://www.youtube.com/watch?v=${videoId}`;
       const html = await fetchHtml(transformedUrl);
-      const { title, ytData, dataKey, resolvedType } = await resolveYouTubeDataFromHtml(html);
-      const segments = await getTranscriptItems(ytData, dataKey);
+      const { title, ytData, dataKey, resolvedType, captionTracks } = await resolveYouTubeDataFromHtml(html);
+      const segments = await getTranscriptItems({ ytData, dataKey, captionTracks });
       const transcript = createTranscriptArray(segments, resolvedType);
       return { title, transcript };
     }
 
-    const { title, ytData, dataKey, resolvedType } = await resolveYouTubeData(videoUrl);
-    const segments = await getTranscriptItems(ytData, dataKey);
+    const { title, ytData, dataKey, resolvedType, captionTracks } = await resolveYouTubeData(videoUrl);
+    const segments = await getTranscriptItems({ ytData, dataKey, captionTracks });
     const transcript = createTranscriptArray(segments, resolvedType);
     return { title, transcript };
   }
@@ -168,10 +294,13 @@
     const html = await fetchHtml(videoUrl);
     const dataKey = 'ytInitialData';
     let ytData = extractJsonFromHtml(html, dataKey);
+    const playerData = extractJsonFromHtml(html, 'ytInitialPlayerResponse');
+    const captionTracks = playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
 
     let title =
       ytData?.videoDetails?.title ||
       ytData?.playerOverlays?.playerOverlayRenderer?.videoDetails?.playerOverlayVideoDetailsRenderer?.title?.simpleText ||
+      playerData?.videoDetails?.title ||
       '';
 
     const panels = ytData?.engagementPanels || [];
@@ -185,7 +314,8 @@
         title: title || fallbackData?.videoDetails?.title || '',
         ytData: fallbackData,
         dataKey: 'ytInitialPlayerResponse',
-        resolvedType: 'shorts'
+        resolvedType: 'shorts',
+        captionTracks
       };
     }
 
@@ -193,13 +323,16 @@
       title,
       ytData,
       dataKey,
-      resolvedType: 'regular'
+      resolvedType: 'regular',
+      captionTracks
     };
   }
 
   async function resolveYouTubeDataFromHtml(html) {
     try {
       const ytData = extractJsonFromHtml(html, 'ytInitialData');
+      const playerData = extractJsonFromHtml(html, 'ytInitialPlayerResponse');
+      const captionTracks = playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
       if (ytData) {
         const title =
           ytData?.videoDetails?.title ||
@@ -216,7 +349,8 @@
             title,
             ytData,
             dataKey: 'ytInitialData',
-            resolvedType: 'regular'
+            resolvedType: 'regular',
+            captionTracks
           };
         }
       }
@@ -233,24 +367,27 @@
       title: fallbackTitle,
       ytData: playerData,
       dataKey: 'ytInitialPlayerResponse',
-      resolvedType: 'shorts'
+      resolvedType: 'shorts',
+      captionTracks: playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks || []
     };
   }
 
-  async function getTranscriptItems(ytData, dataKey) {
+  async function getTranscriptItems({ ytData, dataKey, captionTracks }) {
+    const preferredTrack = selectCaptionTrack(captionTracks);
+    if (preferredTrack?.baseUrl) {
+      const events = await fetchCaptionEvents(preferredTrack.baseUrl);
+      if (events.length) {
+        return events;
+      }
+    }
+
     if (dataKey === 'ytInitialPlayerResponse') {
-      const baseUrl = ytData?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.[0]?.baseUrl;
-      if (!baseUrl) {
+      const fallbackTracks = ytData?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+      const track = selectCaptionTrack(fallbackTracks);
+      if (!track?.baseUrl) {
         throw new Error('Transcript not available for this video.');
       }
-      const captionUrl = baseUrl + '&fmt=json3';
-      const json = await fetch(captionUrl).then(res => {
-        if (!res.ok) {
-          throw new Error(`Transcript request failed (${res.status})`);
-        }
-        return res.json();
-      });
-      return json.events || [];
+      return fetchCaptionEvents(track.baseUrl);
     }
 
     const continuationParams = ytData.engagementPanels?.find(panel =>
@@ -267,7 +404,7 @@
     const clientData = ytData.responseContext?.serviceTrackingParams?.[0]?.params;
     const visitorData = ytData.responseContext?.webResponseContextExtensionData?.ytConfigData?.visitorData;
 
-    const body = {
+    const context = {
       context: {
         client: {
           hl,
@@ -276,7 +413,11 @@
           clientVersion: clientData?.[1]?.value
         },
         request: { useSsl: true }
-      },
+      }
+    };
+
+    const body = {
+      ...context,
       params: continuationParams
     };
 
@@ -293,16 +434,88 @@
       throw new Error(`Transcript request failed (${res.status})`);
     }
 
-    const json = await res.json();
-    return (
-      json.actions?.[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.content?.transcriptSearchPanelRenderer?.body?.transcriptSegmentListRenderer?.initialSegments || []
-    );
+    const json = await parseJsonResponse(res, 'transcript-initial');
+    if (!json) {
+      return [];
+    }
+
+    let segments =
+      json.actions?.[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.content?.transcriptSearchPanelRenderer?.body?.transcriptSegmentListRenderer?.initialSegments || [];
+
+    const initialContinuations =
+      json.actions?.[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.content?.transcriptSearchPanelRenderer?.body?.transcriptSegmentListRenderer?.continuations || [];
+
+    const queue = [...initialContinuations];
+    while (queue.length) {
+      const next = queue.shift();
+      const token =
+        next?.continuationCommand?.token ||
+        next?.nextContinuationData?.continuation ||
+        next?.reloadContinuationData?.continuation ||
+        null;
+
+      if (!token) {
+        continue;
+      }
+
+      const continuationRes = await fetch(YOUTUBE_TRANSCRIPT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ...context, continuation: token })
+      });
+
+      if (!continuationRes.ok) {
+        console.debug('[YAIVS] transcript continuation failed', continuationRes.status);
+        continue;
+      }
+
+      const continuationJson = await parseJsonResponse(continuationRes, 'transcript-continuation');
+      if (!continuationJson) {
+        continue;
+      }
+      const continuationSegments =
+        continuationJson.actions?.[0]?.appendContinuationItemsAction?.continuationItems ||
+        continuationJson.actions?.[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.content?.transcriptSearchPanelRenderer?.body?.transcriptSegmentListRenderer?.continuationItems ||
+        continuationJson.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems ||
+        [];
+
+      const newSegments = continuationSegments.filter(item => item?.transcriptSegmentRenderer);
+
+      if (newSegments.length) {
+        segments = segments.concat(newSegments);
+      }
+
+      const nextContinuations =
+        continuationJson.actions?.[0]?.appendContinuationItemsAction?.continuations ||
+        continuationJson.actions?.[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.content?.transcriptSearchPanelRenderer?.body?.transcriptSegmentListRenderer?.continuations ||
+        continuationJson.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuations ||
+        [];
+
+      if (nextContinuations.length) {
+        queue.push(...nextContinuations);
+      }
+    }
+
+    return segments;
   }
 
   function createTranscriptArray(items, type) {
-    return type === 'regular'
-      ? items.map(item => getSegmentData(item))
-      : items.filter(event => event.segs).map(event => getShortsSegmentData(event));
+    if (!Array.isArray(items) || items.length === 0) {
+      return [];
+    }
+
+    if (items[0]?.transcriptSegmentRenderer) {
+      type = 'regular';
+    } else if (items[0]?.segs || typeof items[0]?.tStartMs === 'number') {
+      type = 'captions';
+    }
+
+    if (type === 'regular') {
+      return items.map(item => getSegmentData(item));
+    }
+
+    return items.filter(event => event.segs).map(event => getShortsSegmentData(event));
   }
 
   function getSegmentData(item) {
@@ -347,12 +560,15 @@
         return this.cache.get(videoId);
       }
 
-      const lines = await fetchTranscriptLines(window.location.href);
-      if (!lines || lines.length === 0) {
+      const segments = await fetchTranscriptSegments(window.location.href);
+      if (!segments || segments.length === 0) {
         throw new Error('No transcript available for this video.');
       }
 
-      const text = normalizeWhitespace(lines.join(' '));
+      const text = segments
+        .map(segment => (segment.label ? `${segment.label} ${segment.text}` : segment.text))
+        .join('\n')
+        .trim();
       if (!text) {
         throw new Error('No transcript available for this video.');
       }
@@ -416,8 +632,8 @@
     async setup() {
       injectStyles();
 
-      const container = await getMetadataContainer();
-      if (!container) {
+      const mountPoint = await getPanelMountPoint();
+      if (!mountPoint?.parent) {
         console.warn('[YAIVS] Unable to locate a mount point for the summary panel.');
         return;
       }
@@ -425,13 +641,20 @@
       let panel = document.getElementById(PANEL_ID);
       if (!panel) {
         panel = this.createPanel();
-        const description = container.querySelector?.('#description');
-        if (description?.parentElement) {
-          description.parentElement.insertBefore(panel, description);
-        } else if (container.firstChild) {
-          container.insertBefore(panel, container.firstChild);
+      }
+
+      const { parent, anchor } = mountPoint;
+      const alreadyMounted = panel.parentElement === parent;
+
+      if (anchor) {
+        if (!alreadyMounted || panel.nextElementSibling !== anchor) {
+          parent.insertBefore(panel, anchor);
+        }
+      } else if (!alreadyMounted || parent.firstElementChild !== panel) {
+        if (parent.firstChild) {
+          parent.insertBefore(panel, parent.firstChild);
         } else {
-          container.appendChild(panel);
+          parent.appendChild(panel);
         }
       }
 
@@ -446,10 +669,10 @@
       container.innerHTML = `
         <header class="yaivs-panel__header">
           <h2 class="yaivs-panel__title">AI Summary</h2>
-          <button class="yaivs-button" type="button" id="yaivs-generate">Summarize with Gemini</button>
+          <button class="yaivs-button" type="button" id="yaivs-generate">Summarize</button>
         </header>
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
-        <pre class="yaivs-summary" id="yaivs-summary" hidden></pre>
+        <div class="yaivs-summary" id="yaivs-summary" hidden></div>
       `;
       return container;
     }
@@ -466,13 +689,18 @@
 
       this.generateHandler = () => this.handleSummarize();
       this.generateBtn.addEventListener('click', this.generateHandler);
+
+      if (!panel.dataset.timestampsBound) {
+        panel.addEventListener('click', event => this.handleTimestampClick(event));
+        panel.dataset.timestampsBound = 'true';
+      }
     }
 
     resetState() {
       if (!this.panel) return;
 
       if (this.summaryEl) {
-        this.summaryEl.textContent = '';
+        this.summaryEl.innerHTML = '';
         this.summaryEl.hidden = true;
       }
 
@@ -483,7 +711,7 @@
 
       if (this.generateBtn) {
         this.generateBtn.disabled = false;
-        this.generateBtn.textContent = 'Summarize with Gemini';
+        this.generateBtn.textContent = 'Summarize';
       }
     }
 
@@ -492,12 +720,12 @@
         return;
       }
 
-      this.setLoading(true, 'Fetching transcript...');
+      this.setLoading(true, 'Fetching transcript…');
 
       try {
         await ensureGeminiKey();
         const transcript = await this.collector.collect();
-        this.setLoading(true, 'Summarizing with Gemini 1.5 Flash...');
+        this.setLoading(true, 'Summarizing highlights…');
 
         const response = await chrome.runtime.sendMessage({
           type: 'summarizeWithGemini',
@@ -530,11 +758,11 @@
       const text = summary ? summary.toString().trim() : '';
       if (!text) {
         this.summaryEl.hidden = true;
-        this.summaryEl.textContent = '';
+        this.summaryEl.innerHTML = '';
         return;
       }
 
-      this.summaryEl.textContent = text;
+      this.summaryEl.innerHTML = formatSummaryHtml(text);
       this.summaryEl.hidden = false;
     }
 
@@ -547,10 +775,35 @@
     setLoading(isLoading, message) {
       if (!this.generateBtn) return;
       this.generateBtn.disabled = isLoading;
-      this.generateBtn.textContent = isLoading ? 'Summarizing…' : 'Summarize with Gemini';
+      this.generateBtn.textContent = isLoading ? 'Summarizing…' : 'Summarize';
       if (message) {
         this.updateStatus(message, 'loading');
       }
+    }
+
+    handleTimestampClick(event) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      if (!target.classList.contains('yaivs-timestamp')) {
+        return;
+      }
+
+      event.preventDefault();
+      const seconds = Number(target.dataset.seconds || 'NaN');
+      if (!Number.isFinite(seconds)) {
+        return;
+      }
+
+      const video = document.querySelector('video');
+      if (!video) {
+        return;
+      }
+
+      video.currentTime = seconds;
+      video.focus?.();
     }
   }
 
@@ -563,96 +816,94 @@
     style.id = STYLE_ID;
     style.textContent = `
       #${PANEL_ID} {
-        padding: 16px;
-        margin-top: 16px;
-        border-radius: 12px;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        background: rgba(248, 249, 251, 0.85);
-        backdrop-filter: blur(8px);
+        margin: 12px 0 20px;
+        padding: 12px 0;
+        border-top: 1px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.08));
+        border-bottom: 1px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.08));
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 10px;
       }
 
       .yaivs-panel__header {
         display: flex;
-        justify-content: space-between;
         align-items: center;
         gap: 12px;
+        flex-wrap: wrap;
       }
 
       .yaivs-panel__title {
         margin: 0;
-        font-size: 18px;
-        color: #0f172a;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--yt-spec-text-primary, #0f0f0f);
+        letter-spacing: 0.3px;
       }
 
       .yaivs-button {
-        padding: 8px 14px;
-        border-radius: 8px;
-        border: none;
-        font-size: 14px;
+        padding: 6px 14px;
+        border-radius: 16px;
+        border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
+        background: var(--yt-spec-general-background-a, rgba(255, 255, 255, 0.08));
+        color: var(--yt-spec-text-primary, #0f0f0f);
+        font-family: inherit;
+        font-size: 12px;
         font-weight: 600;
-        background: #1a73e8;
-        color: #fff;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
         cursor: pointer;
-        transition: background 0.2s ease;
+        transition: background 0.2s ease, border 0.2s ease, color 0.2s ease;
+        margin-left: auto;
+        flex-shrink: 0;
       }
 
       .yaivs-button:hover:enabled {
-        background: #1558b0;
+        background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.08));
       }
 
       .yaivs-button:disabled {
-        background: #a1c2f7;
+        background: var(--yt-spec-button-chip-background-disabled, rgba(0, 0, 0, 0.05));
+        border-color: transparent;
+        color: var(--yt-spec-text-disabled, rgba(0, 0, 0, 0.4));
         cursor: not-allowed;
       }
 
       .yaivs-status {
         margin: 0;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid transparent;
         font-size: 13px;
-        text-align: left;
+        color: var(--yt-spec-text-secondary, #606060);
       }
 
-      .yaivs-status--info {
-        background: rgba(26, 115, 232, 0.1);
-        color: #0b3c70;
-        border-color: rgba(26, 115, 232, 0.2);
-      }
-
-      .yaivs-status--loading {
-        background: rgba(26, 115, 232, 0.08);
-        color: #0b3c70;
-        border-color: rgba(26, 115, 232, 0.24);
-      }
-
+      .yaivs-status--loading,
       .yaivs-status--success {
-        background: rgba(15, 157, 88, 0.12);
-        color: #0f5132;
-        border-color: rgba(15, 157, 88, 0.24);
+        color: var(--yt-spec-text-primary, #0f0f0f);
       }
 
       .yaivs-status--error {
-        background: rgba(217, 48, 37, 0.12);
-        color: #7f1d1d;
-        border-color: rgba(217, 48, 37, 0.24);
+        color: var(--yt-spec-brand-danger, #d93025);
       }
 
       .yaivs-summary {
         margin: 0;
-        padding: 12px;
-        border-radius: 8px;
-        background: #fff;
-        border: 1px solid rgba(15, 23, 42, 0.1);
+        padding: 0;
+        border: none;
+        background: transparent;
         font-family: inherit;
         font-size: 14px;
-        line-height: 1.5;
-        white-space: pre-wrap;
-        max-height: 320px;
-        overflow-y: auto;
+        line-height: 1.6;
+        white-space: normal;
+        color: var(--yt-spec-text-primary, #0f0f0f);
+      }
+
+      .yaivs-summary .yaivs-timestamp {
+        color: var(--yt-spec-call-to-action, #3ea6ff);
+        text-decoration: none;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .yaivs-summary .yaivs-timestamp:hover {
+        text-decoration: underline;
       }
     `;
 

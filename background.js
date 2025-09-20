@@ -20,9 +20,15 @@ async function summarizeWithGemini(transcript) {
         parts: [
           {
             text: [
-              'You are generating a concise, bullet-style summary of a YouTube video.',
-              'Focus on major sections, key takeaways, and noteworthy facts.',
-              'Avoid speculation, note if transcript seems incomplete.',
+              'Summarize the video in a polished ChatGPT recap style.',
+              'Return only plain text (no markdown tables). Follow these rules:',
+              '',
+              '• Use 4-6 sections total.',
+              '• Start every section title with an expressive emoji and a short label, for example "📦 Unboxing".',
+              '• After the title, list 2-4 concise bullet points using the "• " glyph. Keep each bullet under ~18 words.',
+              '• Add timestamps in [mm:ss] when they increase clarity.',
+              '• Mention any missing transcript portions or uncertainties in the relevant section.',
+              '• The final section title must be "👉 Takeaway" and contain 2-3 bullets that capture the overall verdict. Do not add questions or calls-to-action afterwards.',
               '',
               'Transcript:',
               transcript
@@ -46,7 +52,13 @@ async function summarizeWithGemini(transcript) {
     throw new Error(`Gemini request failed (${response.status}): ${errorText.slice(0, 200)}`);
   }
 
-  const data = await response.json();
+  const raw = await response.text();
+  let data;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    throw new Error(`Gemini response parsing failed: ${error.message}`);
+  }
   const summary = data?.candidates?.[0]?.content?.parts
     ?.map(part => part.text)
     .filter(Boolean)
