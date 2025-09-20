@@ -676,8 +676,11 @@
           <h2 class="yaivs-panel__title">AI Summary</h2>
           <span class="yaivs-spacer"></span>
           <button class="yaivs-button" type="button" id="yaivs-generate">Summarize</button>
-          <button class="yaivs-button" type="button" id="yaivs-prompt">Prompt</button>
         </header>
+        <div class="yaivs-prompt" id="yaivs-prompt-row">
+          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video…" aria-label="Ask about this video" />
+          <button class="yaivs-button" type="button" id="yaivs-ask">Ask</button>
+        </div>
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
         <div class="yaivs-summary" id="yaivs-summary" hidden></div>
       `;
@@ -689,7 +692,8 @@
       this.summaryEl = panel.querySelector('#yaivs-summary');
       this.statusEl = panel.querySelector('#yaivs-status');
       this.generateBtn = panel.querySelector('#yaivs-generate');
-      this.promptBtn = panel.querySelector('#yaivs-prompt');
+      this.promptInput = panel.querySelector('#yaivs-prompt-input');
+      this.askBtn = panel.querySelector('#yaivs-ask');
 
       if (this.generateHandler) {
         this.generateBtn.removeEventListener('click', this.generateHandler);
@@ -697,12 +701,20 @@
       this.generateHandler = () => this.handleSummarize();
       this.generateBtn.addEventListener('click', this.generateHandler);
 
-      if (this.promptHandler && this.promptBtn) {
-        this.promptBtn.removeEventListener('click', this.promptHandler);
+      if (this.askHandler && this.askBtn) {
+        this.askBtn.removeEventListener('click', this.askHandler);
       }
-      if (this.promptBtn) {
-        this.promptHandler = () => this.handlePrompt();
-        this.promptBtn.addEventListener('click', this.promptHandler);
+      if (this.askBtn) {
+        this.askHandler = () => this.handlePromptSubmit();
+        this.askBtn.addEventListener('click', this.askHandler);
+      }
+      if (this.promptInput) {
+        this.promptInput.addEventListener('keydown', e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            this.handlePromptSubmit();
+          }
+        });
       }
 
       if (!panel.dataset.listenersBound) {
@@ -755,6 +767,8 @@
         this.generateBtn.disabled = false;
         this.generateBtn.textContent = 'Summarize';
       }
+      if (this.askBtn) this.askBtn.disabled = false;
+      if (this.promptInput) this.promptInput.disabled = false;
     }
 
     async handleSummarize() {
@@ -813,6 +827,8 @@
       if (!this.generateBtn) return;
       this.generateBtn.disabled = isLoading;
       this.generateBtn.textContent = isLoading ? 'Summarizing…' : 'Summarize';
+      if (this.askBtn) this.askBtn.disabled = isLoading;
+      if (this.promptInput) this.promptInput.disabled = isLoading;
       if (message) {
         this.updateStatus(message, 'loading');
       }
@@ -890,10 +906,10 @@
       }
     }
 
-    async handlePrompt() {
-      if (!this.promptBtn || this.promptBtn.disabled) return;
-      const question = window.prompt('Ask about this video (use natural language):');
-      if (!question || !question.trim()) return;
+    async handlePromptSubmit() {
+      if (!this.askBtn || this.askBtn.disabled) return;
+      const value = (this.promptInput?.value || '').trim();
+      if (!value) return;
 
       this.setLoading(true, 'Fetching transcript…');
       try {
@@ -901,8 +917,9 @@
         const provider = this.settings.get('provider') || 'gemini';
         const { text: transcript, durationSeconds } = await this.transcriptService.collect();
         this.setLoading(true, `Answering with ${this.getProviderLabel(provider)}…`);
-        const answer = await this.askUsingProvider(provider, transcript, durationSeconds, question.trim());
-        this.renderSummary(answer);
+        const answer = await this.askUsingProvider(provider, transcript, durationSeconds, value);
+        const combined = `❓ ${value}\n\n${answer}`;
+        this.renderSummary(combined);
         this.updateStatus(`Answer ready (${this.getProviderLabel(provider)}).`, 'success');
       } catch (error) {
         console.error('Prompt failed', error);
@@ -1007,6 +1024,23 @@
         margin: 0;
         font-size: 13px;
         color: var(--yt-spec-text-secondary, #606060);
+      }
+
+      .yaivs-prompt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .yaivs-input {
+        flex: 1;
+        min-width: 160px;
+        padding: 6px 10px;
+        border-radius: 14px;
+        border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
+        background: var(--yt-spec-general-background-a, rgba(255, 255, 255, 0.08));
+        color: var(--yt-spec-text-primary, #0f0f0f);
+        font: inherit;
       }
 
       .yaivs-status--loading,
