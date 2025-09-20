@@ -2,6 +2,7 @@
   const PANEL_ID = 'yaivs-summary-panel';
   const STYLE_ID = 'yaivs-summary-styles';
   const YOUTUBE_TRANSCRIPT_ENDPOINT = 'https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false';
+  const AUTO_SUMMARIZE = true;
 
   // ---------- utility helpers ----------
   const DECODER = document.createElement('textarea');
@@ -629,12 +630,17 @@
       this.summaryEl = null;
       this.statusEl = null;
       this.generateBtn = null;
+      this.isSummarizing = false;
+      this.autoTriggeredVideoId = null;
       this.observeNavigation();
       this.setup();
     }
 
     observeNavigation() {
-      window.addEventListener('yt-navigate-start', () => this.resetState());
+      window.addEventListener('yt-navigate-start', () => {
+        this.autoTriggeredVideoId = null;
+        this.resetState();
+      });
       window.addEventListener('yt-navigate-finish', () => this.setup());
     }
 
@@ -669,6 +675,7 @@
 
       this.bindElements(panel);
       this.resetState();
+      this.maybeAutoSummarize();
     }
 
     createPanel() {
@@ -703,6 +710,14 @@
         panel.addEventListener('click', event => this.handleTimestampClick(event));
         panel.dataset.timestampsBound = 'true';
       }
+      if (!panel.dataset.timestampsBound) {
+        panel.addEventListener('click', event => this.handleTimestampClick(event));
+        panel.dataset.timestampsBound = 'true';
+      }
+
+      if (AUTO_SUMMARIZE && this.statusEl && this.summaryEl?.hidden) {
+        this.updateStatus('Preparing summary…', 'loading');
+      }
     }
 
     resetState() {
@@ -714,8 +729,13 @@
       }
 
       if (this.statusEl) {
-        this.statusEl.textContent = 'Click to summarize the current video.';
-        this.statusEl.className = 'yaivs-status yaivs-status--info';
+        if (AUTO_SUMMARIZE) {
+          this.statusEl.textContent = 'Preparing summary…';
+          this.statusEl.className = 'yaivs-status yaivs-status--loading';
+        } else {
+          this.statusEl.textContent = 'Click to summarize the current video.';
+          this.statusEl.className = 'yaivs-status yaivs-status--info';
+        }
       }
 
       if (this.generateBtn) {
@@ -729,7 +749,13 @@
         return;
       }
 
+      const videoId = this.collector.getVideoId();
+      if (videoId) {
+        this.autoTriggeredVideoId = videoId;
+      }
+
       this.setLoading(true, 'Fetching transcript…');
+      this.isSummarizing = true;
 
       try {
         await ensureGeminiKey();
@@ -759,6 +785,7 @@
         chrome.runtime.sendMessage({ type: 'logError', message: error.message || String(error) }).catch(() => {});
       } finally {
         this.setLoading(false);
+        this.isSummarizing = false;
       }
     }
 
@@ -789,6 +816,23 @@
       if (message) {
         this.updateStatus(message, 'loading');
       }
+    }
+
+    maybeAutoSummarize() {
+      if (!AUTO_SUMMARIZE) {
+        return;
+      }
+
+      const videoId = this.collector.getVideoId();
+      if (!videoId || this.autoTriggeredVideoId === videoId) {
+        return;
+      }
+
+      if (this.generateBtn?.disabled || this.isSummarizing) {
+        return;
+      }
+
+      this.handleSummarize();
     }
 
     handleTimestampClick(event) {
