@@ -687,8 +687,8 @@
       container.innerHTML = `
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
         <div class="yaivs-prompt" id="yaivs-prompt-row">
-          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
-          <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">Ask/Summarize</button>
+          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" hidden />
+          <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">Summarize</button>
           <button class="yaivs-button yaivs-button--ghost yaivs-button--split" type="button" id="yaivs-style" aria-label="Style menu">▼</button>
         </div>
         <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
@@ -803,6 +803,7 @@
       }
       if (this.promptInput) {
         this.promptInput.value = '';
+        this.promptInput.setAttribute('hidden', '');
       }
       this.updateInfoMessage();
       if (this.generateBtn) {
@@ -820,6 +821,10 @@
 
       // Combined behavior: if there's a question typed, treat as Ask.
       const q = (this.promptInput?.value || '').trim();
+      // Reveal the Ask input the first time user clicks Summarize
+      if (this.promptInput && this.promptInput.hasAttribute('hidden')) {
+        this.promptInput.removeAttribute('hidden');
+      }
       if (q) {
         this.handlePromptSubmit();
         return;
@@ -1130,9 +1135,11 @@
       }
 
       .yaivs-button--primary {
-        background: var(--yt-spec-call-to-action, #3ea6ff);
-        color: #0b0b0b;
-        border-color: transparent;
+        background: #0f0f0f;
+        color: #ffffff;
+        border-color: rgba(255,255,255,0.14);
+        font-weight: 700;
+        letter-spacing: 0.6px;
       }
 
       .yaivs-button--ghost {
@@ -1149,6 +1156,9 @@
         margin-left: -1px;
         border-top-left-radius: 0;
         border-bottom-left-radius: 0;
+        color: #ffffff;
+        background: #1a1a1a;
+        border-color: rgba(255,255,255,0.14);
       }
 
       .yaivs-button:hover:enabled {
