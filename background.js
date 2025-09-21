@@ -1,11 +1,12 @@
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const DEFAULT_PROVIDER = 'gemini';
 
 async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt, includeTimestamps }) {
-  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'summaryMode', 'customPrompt', 'includeTimestamps']);
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'summaryMode', 'customPrompt', 'includeTimestamps']);
   const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
   const storedCustom = typeof customPrompt === 'string' ? customPrompt : settings.customPrompt;
   const mode = ['simple', 'detailed', 'custom'].includes(selectedMode) ? selectedMode : 'simple';
@@ -20,6 +21,8 @@ async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, duratio
       return summarizeWithOpenAI(userText, settings.openaiKey);
     case 'claude':
       return summarizeWithAnthropic(userText, settings.claudeKey);
+    case 'openrouter':
+      return summarizeWithOpenRouter(userText, settings.openrouterKey, settings.openrouterModel);
     default:
       return summarizeWithGemini(userText, settings.geminiKey);
   }
@@ -94,7 +97,7 @@ function buildTimeHints(total) {
 }
 
 async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, question, includeTimestamps }) {
-  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey']);
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel']);
   const prompt = buildQuestionPrompt(question, durationSeconds, includeTimestamps !== false);
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
 
@@ -103,6 +106,8 @@ async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSecon
       return summarizeWithOpenAI(userText, settings.openaiKey);
     case 'claude':
       return summarizeWithAnthropic(userText, settings.claudeKey);
+    case 'openrouter':
+      return summarizeWithOpenRouter(userText, settings.openrouterKey, settings.openrouterModel);
     default:
       return summarizeWithGemini(userText, settings.geminiKey);
   }
@@ -254,6 +259,44 @@ async function summarizeWithAnthropic(prompt, key) {
   if (!summary.trim()) {
     throw new Error('Anthropic response was empty.');
   }
+  return summary;
+}
+
+async function summarizeWithOpenRouter(prompt, key, model) {
+  if (!key) {
+    throw new Error('OpenRouter API key is missing.');
+  }
+  const chosenModel = (model && String(model)) || 'google/gemma-2-9b-it:free';
+  const body = {
+    model: chosenModel,
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant that summarizes YouTube transcripts.' },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.3
+  };
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${key}`,
+    // Optional but recommended by OpenRouter for attribution/rate-limits friendliness
+    'HTTP-Referer': chrome.runtime.getURL('popup.html'),
+    'X-Title': 'YouTube AI Video Summarizer'
+  };
+
+  const response = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenRouter request failed (${response.status}): ${text.slice(0, 200)}`);
+  }
+  const data = await response.json();
+  const summary = data?.choices?.[0]?.message?.content || '';
+  if (!summary.trim()) throw new Error('OpenRouter response was empty.');
   return summary;
 }
 

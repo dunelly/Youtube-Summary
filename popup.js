@@ -9,14 +9,17 @@ const includeTimestampsToggle = document.getElementById('includeTimestamps');
 const keyInputs = {
   gemini: document.getElementById('geminiKey'),
   gpt: document.getElementById('openaiKey'),
-  claude: document.getElementById('claudeKey')
+  claude: document.getElementById('claudeKey'),
+  openrouter: document.getElementById('openrouterKey')
 };
+const openrouterModelSelect = document.getElementById('openrouterModel');
 const keySections = Array.from(document.querySelectorAll('.key-section'));
 // No Chrome language list needed.
 const defaultPlaceholders = {
-  gemini: keyInputs.gemini.placeholder,
-  gpt: keyInputs.gpt.placeholder,
-  claude: keyInputs.claude.placeholder
+  gemini: keyInputs.gemini?.placeholder || 'Paste Gemini key',
+  gpt: keyInputs.gpt?.placeholder || 'Paste OpenAI key',
+  claude: keyInputs.claude?.placeholder || 'Paste Claude key',
+  openrouter: keyInputs.openrouter?.placeholder || 'Paste OpenRouter key'
 };
 
 async function load() {
@@ -27,6 +30,8 @@ async function load() {
       'geminiKey',
       'openaiKey',
       'claudeKey',
+      'openrouterKey',
+      'openrouterModel',
       'summaryMode',
       'customPrompt',
       'includeTimestamps'
@@ -38,6 +43,10 @@ async function load() {
     keyInputs.gemini.value = stored.geminiKey || '';
     keyInputs.gpt.value = stored.openaiKey || '';
     keyInputs.claude.value = stored.claudeKey || '';
+    if (keyInputs.openrouter) keyInputs.openrouter.value = stored.openrouterKey || '';
+    if (openrouterModelSelect) {
+      openrouterModelSelect.value = stored.openrouterModel || 'google/gemma-2-9b-it:free';
+    }
 
     // Summary mode + custom prompt
     if (summaryModeSelect) {
@@ -145,12 +154,21 @@ if (includeTimestampsToggle) {
 Object.entries(keyInputs).forEach(([provider, input]) => {
   input.addEventListener('change', () => {
     const value = input.value.trim();
-    const keyName = provider === 'gpt' ? 'openaiKey' : provider === 'claude' ? 'claudeKey' : 'geminiKey';
+    const keyName = provider === 'gpt' ? 'openaiKey' : provider === 'claude' ? 'claudeKey' : provider === 'openrouter' ? 'openrouterKey' : 'geminiKey';
     chrome.storage.sync
       .set({ [keyName]: value })
       .catch(error => console.error(`[YAIVS] Failed to save ${provider} key`, error));
   });
 });
+
+if (openrouterModelSelect) {
+  openrouterModelSelect.addEventListener('change', () => {
+    const value = openrouterModelSelect.value;
+    chrome.storage.sync
+      .set({ openrouterModel: value })
+      .catch(error => console.error('[YAIVS] Failed to save OpenRouter model', error));
+  });
+}
 
 load();
 

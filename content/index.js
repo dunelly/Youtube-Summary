@@ -600,7 +600,7 @@
   // Provider utilities
   // ---------------------------------------------------------------------------
   async function ensureProviderKey(provider) {
-    const keyName = provider === 'gpt' ? 'openaiKey' : provider === 'claude' ? 'claudeKey' : 'geminiKey';
+    const keyName = provider === 'gpt' ? 'openaiKey' : provider === 'claude' ? 'claudeKey' : provider === 'openrouter' ? 'openrouterKey' : 'geminiKey';
     const stored = await chrome.storage.sync.get([keyName]);
     let value = stored[keyName];
 
@@ -614,9 +614,9 @@
     }
 
     if (!value) {
-      const label = provider === 'gpt' ? 'OpenAI' : provider === 'claude' ? 'Anthropic' : 'Gemini';
-      throw new Error(`${label} API key is required. Add it from the extension popup.`);
-    }
+    const label = provider === 'gpt' ? 'OpenAI' : provider === 'claude' ? 'Anthropic' : provider === 'openrouter' ? 'OpenRouter' : 'Gemini';
+    throw new Error(`${label} API key is required. Add it from the extension popup.`);
+  }
 
     return value;
   }
@@ -686,21 +686,29 @@
       container.className = 'yaivs-panel';
       container.innerHTML = `
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
-        <div class="yaivs-prompt" id="yaivs-prompt-row">
-          <div class="yaivs-input-wrap">
-            <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" hidden />
-            <button class="yaivs-send" id="yaivs-send" aria-label="Send" hidden>↑</button>
+        <div class="yaivs-actions" id="yaivs-actions">
+          <button class="yaivs-unified-button" type="button" id="yaivs-unified" aria-label="AI Summarize">
+            <span class="yaivs-unified-main" id="yaivs-generate">
+              <span class="yaivs-text">SUMMARIZE</span>
+            </span>
+            <span class="yaivs-unified-dropdown" id="yaivs-menu" aria-label="Style options">
+              <span class="yaivs-arrow">▾</span>
+            </span>
+          </button>
+          <div class="yaivs-prompt" id="yaivs-prompt-row">
+            <div class="yaivs-input-wrap">
+              <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" hidden />
+              <button class="yaivs-send" id="yaivs-send" aria-label="Send" hidden>↑</button>
+            </div>
           </div>
-          <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">SUMMARIZE</button>
-          <button class="yaivs-button yaivs-button--ghost yaivs-button--split" type="button" id="yaivs-style" aria-label="Style menu">▼</button>
-        </div>
-        <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
-          <button type="button" data-style="simple">Bullets</button>
-          <button type="button" data-style="detailed">Detailed</button>
-          <button type="button" data-style="chapters">Chapters</button>
-          <button type="button" data-style="proscons">Pros / Cons</button>
-          <button type="button" data-style="recipe">Recipe</button>
-          <button type="button" data-style="outline">Outline</button>
+          <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
+            <button type="button" data-style="simple">Bullets</button>
+            <button type="button" data-style="detailed">Detailed</button>
+            <button type="button" data-style="chapters">Chapters</button>
+            <button type="button" data-style="proscons">Pros / Cons</button>
+            <button type="button" data-style="recipe">Recipe</button>
+            <button type="button" data-style="outline">Outline</button>
+          </div>
         </div>
         <div class="yaivs-tools" id="yaivs-tools" hidden>
           <button type="button" id="yaivs-copy" class="yaivs-tool">Copy</button>
@@ -714,11 +722,12 @@
       this.panel = panel;
       this.summaryEl = panel.querySelector('#yaivs-summary');
       this.statusEl = panel.querySelector('#yaivs-status');
+      this.unifiedBtn = panel.querySelector('#yaivs-unified');
       this.generateBtn = panel.querySelector('#yaivs-generate');
       this.promptInput = panel.querySelector('#yaivs-prompt-input');
       this.sendBtn = panel.querySelector('#yaivs-send');
       this.askBtn = null;
-      this.styleBtn = panel.querySelector('#yaivs-style');
+      this.styleBtn = panel.querySelector('#yaivs-menu');
       this.styleMenu = panel.querySelector('#yaivs-style-menu');
       this.clearBtn = null;
       this.toolsRow = panel.querySelector('#yaivs-tools');
@@ -728,7 +737,10 @@
       if (this.generateHandler) {
         this.generateBtn.removeEventListener('click', this.generateHandler);
       }
-      this.generateHandler = () => this.handleSummarize();
+      this.generateHandler = (event) => {
+        event.stopPropagation();
+        this.handleSummarize();
+      };
       this.generateBtn.addEventListener('click', this.generateHandler);
 
       // Ask button removed; Enter in input submits.
@@ -813,9 +825,10 @@
         this.promptInput.setAttribute('hidden', '');
       }
       this.updateInfoMessage();
-      if (this.generateBtn) {
-        this.generateBtn.disabled = false;
-        this.generateBtn.textContent = 'SUMMARIZE';
+      if (this.unifiedBtn) {
+        this.unifiedBtn.disabled = false;
+        const textSpan = this.unifiedBtn.querySelector('.yaivs-text');
+        if (textSpan) textSpan.textContent = 'SUMMARIZE';
       }
       // no separate ask button
       if (this.promptInput) this.promptInput.disabled = false;
@@ -825,7 +838,7 @@
     }
 
     async handleSummarize(overrides) {
-      if (!this.generateBtn || this.generateBtn.disabled) return;
+      if (!this.unifiedBtn || this.unifiedBtn.disabled) return;
 
       // Combined behavior: if there's a question typed, treat as Ask.
       const q = (this.promptInput?.value || '').trim();
@@ -894,9 +907,10 @@
     }
 
     setLoading(isLoading, message) {
-      if (!this.generateBtn) return;
-      this.generateBtn.disabled = isLoading;
-      this.generateBtn.textContent = isLoading ? 'WORKING…' : 'SUMMARIZE';
+      if (!this.unifiedBtn) return;
+      this.unifiedBtn.disabled = isLoading;
+      const textSpan = this.unifiedBtn.querySelector('.yaivs-text');
+      if (textSpan) textSpan.textContent = isLoading ? 'WORKING…' : 'SUMMARIZE';
       if (this.promptInput) this.promptInput.disabled = isLoading;
       if (this.sendBtn) this.sendBtn.disabled = isLoading;
       if (message) {
@@ -910,7 +924,7 @@
 
       const videoId = this.transcriptService.getVideoId();
       if (!videoId || this.autoTriggeredVideoId === videoId) return;
-      if (this.generateBtn?.disabled || this.isSummarizing) return;
+      if (this.unifiedBtn?.disabled || this.isSummarizing) return;
       if (!this.summaryEl?.hidden) return;
 
       this.handleSummarize();
@@ -972,6 +986,8 @@
           return 'GPT';
         case 'claude':
           return 'Claude';
+        case 'openrouter':
+          return 'OpenRouter';
         default:
           return 'Gemini';
       }
@@ -980,12 +996,36 @@
     toggleStyleMenu() {
       if (!this.styleMenu) return;
       const isHidden = this.styleMenu.hasAttribute('hidden');
-      if (isHidden) this.styleMenu.removeAttribute('hidden');
-      else this.styleMenu.setAttribute('hidden', '');
+      if (isHidden) {
+        this.styleMenu.removeAttribute('hidden');
+        // Position under the arrow portion of the split button
+        this.positionStyleMenu();
+      } else {
+        this.styleMenu.setAttribute('hidden', '');
+      }
     }
 
     hideStyleMenu() {
       if (this.styleMenu) this.styleMenu.setAttribute('hidden', '');
+    }
+
+    positionStyleMenu() {
+      if (!this.styleMenu || !this.styleBtn || !this.panel) return;
+      const actions = this.panel.querySelector('#yaivs-actions');
+      if (!actions) return;
+      const actionsRect = actions.getBoundingClientRect();
+      const arrowRect = this.styleBtn.getBoundingClientRect();
+
+      // Ensure we can measure menu width
+      const prevLeft = this.styleMenu.style.left;
+      this.styleMenu.style.left = '0px';
+      const menuRect = this.styleMenu.getBoundingClientRect();
+
+      const desiredLeft = Math.round(arrowRect.right - actionsRect.left - menuRect.width);
+      const minLeft = 0;
+      const maxLeft = Math.max(0, Math.round(actionsRect.width - menuRect.width));
+      const clampedLeft = Math.min(maxLeft, Math.max(minLeft, desiredLeft));
+      this.styleMenu.style.left = `${clampedLeft}px`;
     }
 
     handleStyleMenuClick(event) {
@@ -1057,7 +1097,7 @@
     }
 
     async handlePromptSubmit() {
-      if (this.generateBtn?.disabled) return;
+      if (this.unifiedBtn?.disabled) return;
       const value = (this.promptInput?.value || '').trim();
       if (!value) return;
 
@@ -1155,31 +1195,89 @@
         flex-shrink: 0;
       }
 
-      .yaivs-button--primary {
+      /* Unified Button Design */
+      .yaivs-unified-button {
+        display: flex;
+        align-items: center;
+        padding: 0;
+        border-radius: 20px;
+        border: 1px solid rgba(255,255,255,0.14);
         background: #0f0f0f;
         color: #ffffff;
-        border-color: rgba(255,255,255,0.14);
-        font-weight: 700;
-        letter-spacing: 0.6px;
+        font-family: inherit;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        overflow: hidden;
+        flex-shrink: 0; /* keep size; let input shrink */
       }
 
-      .yaivs-button--ghost {
-        background: transparent;
-        border-color: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.12));
+      .yaivs-unified-main {
+        display: flex;
+        align-items: center;
+        padding: 8px 16px;
+        flex: 1;
+        transition: background 0.2s ease;
       }
 
-      /* Split button appearance */
-      #yaivs-generate {
-        border-top-right-radius: 0;
-        border-bottom-right-radius: 0;
+      .yaivs-unified-dropdown {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 8px;
+        border-left: 1px solid rgba(255,255,255,0.2);
+        transition: background 0.2s ease;
+        min-width: 24px;
+        position: relative;
       }
-      #yaivs-style {
-        margin-left: -1px;
-        border-top-left-radius: 0;
-        border-bottom-left-radius: 0;
-        color: #ffffff;
-        background: #1a1a1a;
-        border-color: rgba(255,255,255,0.14);
+
+      .yaivs-text {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+      }
+
+      .yaivs-arrow {
+        font-size: 12px;
+        line-height: 1;
+        opacity: 0.8;
+      }
+
+      .yaivs-unified-main:hover {
+        background: rgba(255,255,255,0.1);
+      }
+
+      .yaivs-unified-dropdown:hover {
+        background: rgba(255,255,255,0.1);
+      }
+
+      .yaivs-unified-button:disabled .yaivs-unified-main {
+        background: rgba(0,0,0,0.1);
+        color: rgba(255,255,255,0.5);
+        cursor: not-allowed;
+      }
+
+      .yaivs-unified-button:disabled .yaivs-unified-dropdown {
+        background: rgba(0,0,0,0.1);
+        color: rgba(255,255,255,0.5);
+        cursor: not-allowed;
+      }
+
+      .yaivs-unified-button:focus {
+        outline: 2px solid rgba(62, 166, 255, 0.5);
+        outline-offset: 2px;
+      }
+
+      .yaivs-unified-button:focus:not(:focus-visible) {
+        outline: none;
+      }
+
+      .yaivs-actions {
+        display: flex;
+        align-items: center;
+        position: relative;
+        gap: 8px;
+        width: 100%;
+        overflow: hidden; /* prevent children from bleeding out */
       }
 
       .yaivs-button:hover:enabled {
@@ -1206,21 +1304,24 @@
         align-items: center;
         gap: 8px;
         margin-top: 0;
-        justify-content: flex-end;
+        flex: 1;
+        justify-content: flex-start;
+        min-width: 0; /* allow shrinking inside flex row */
       }
 
-      .yaivs-input-wrap { position: relative; flex: 1; }
+      .yaivs-input-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
 
       .yaivs-input {
-        flex: 1;
-        min-width: 160px;
-        max-width: 820px;
+        width: 100%;
+        min-width: 220px;
+        max-width: 100%;
         padding: 10px 42px 10px 14px; /* right padding for send button */
         border-radius: 20px;
         border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
         background: var(--yt-spec-brand-background-primary, rgba(255, 255, 255, 0.06));
         color: var(--yt-spec-text-primary, #0f0f0f);
         font: inherit;
+        box-sizing: border-box; /* ensure padding/border stay within width */
       }
 
       .yaivs-send {
@@ -1244,8 +1345,9 @@
 
       .yaivs-style-menu {
         position: absolute;
-        right: 8px;
-        top: 52px;
+        left: 0; /* positioned via JS to align under arrow */
+        right: auto;
+        top: calc(100% + 8px);
         display: flex;
         flex-direction: column;
         gap: 4px;
@@ -1256,6 +1358,8 @@
         border-radius: 8px;
         z-index: 9999;
         box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+        min-width: 120px;
+        width: max-content;
       }
 
       .yaivs-style-menu > button {
