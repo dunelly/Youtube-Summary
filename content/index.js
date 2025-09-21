@@ -801,6 +801,9 @@
         this.summaryEl.innerHTML = '';
         this.summaryEl.hidden = true;
       }
+      if (this.promptInput) {
+        this.promptInput.value = '';
+      }
       this.updateInfoMessage();
       if (this.generateBtn) {
         this.generateBtn.disabled = false;
