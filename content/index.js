@@ -702,10 +702,8 @@
         <div class="yaivs-hint" id="yaivs-hint">Press Enter to ask</div>
         <div class="yaivs-tools" id="yaivs-tools" hidden>
           <button type="button" id="yaivs-copy" class="yaivs-tool">Copy</button>
-          <span class="yaivs-divider"></span>
-          <button type="button" id="yaivs-toggle" class="yaivs-tool">Expand</button>
         </div>
-        <div class="yaivs-summary collapsed" id="yaivs-summary" hidden></div>
+        <div class="yaivs-summary" id="yaivs-summary" hidden></div>
       `;
       return container;
     }
@@ -722,7 +720,7 @@
       this.clearBtn = null;
       this.toolsRow = panel.querySelector('#yaivs-tools');
       this.copyBtn = panel.querySelector('#yaivs-copy');
-      this.toggleBtn = panel.querySelector('#yaivs-toggle');
+      this.toggleBtn = null;
 
       if (this.generateHandler) {
         this.generateBtn.removeEventListener('click', this.generateHandler);
@@ -760,9 +758,7 @@
       if (this.copyBtn) {
         this.copyBtn.addEventListener('click', () => this.copySummary());
       }
-      if (this.toggleBtn) {
-        this.toggleBtn.addEventListener('click', () => this.toggleExpand());
-      }
+      // no expand/collapse button
 
       this.updateInfoMessage();
       // no provider chip
@@ -994,13 +990,7 @@
       });
     }
 
-    toggleExpand() {
-      if (!this.summaryEl || !this.toggleBtn) return;
-      const wasCollapsed = this.summaryEl.classList.contains('collapsed');
-      if (wasCollapsed) this.summaryEl.classList.remove('collapsed');
-      else this.summaryEl.classList.add('collapsed');
-      this.toggleBtn.textContent = wasCollapsed ? 'Collapse' : 'Expand';
-    }
+    // expand/collapse removed
 
     getPreset(style) {
       switch (style) {
@@ -1049,8 +1039,7 @@
         const { text: transcript, durationSeconds } = await this.transcriptService.collect();
         this.setLoading(true, `Answering with ${this.getProviderLabel(provider)}…`);
         const answer = await this.askUsingProvider(provider, transcript, durationSeconds, value);
-        const combined = `❓ ${value}\n\n${answer}`;
-        this.renderSummary(combined);
+        this.renderSummary(answer);
         this.updateStatus(`Answer ready (${this.getProviderLabel(provider)}).`, 'success');
       } catch (error) {
         console.error('Prompt failed', error);
@@ -1284,7 +1273,7 @@
         cursor: pointer;
       }
 
-      .yaivs-divider { width: 1px; height: 16px; background: var(--yt-spec-10-percent-layer, rgba(0,0,0,0.1)); display: inline-block; }
+      /* .yaivs-divider removed */
 
       .yaivs-summary .yaivs-timestamp {
         color: var(--yt-spec-call-to-action, #3ea6ff);
