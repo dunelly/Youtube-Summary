@@ -5,6 +5,7 @@ const statusEl = document.getElementById('status');
 const summaryModeSelect = document.getElementById('summaryMode');
 const customPromptContainer = document.getElementById('customPromptContainer');
 const customPromptTextarea = document.getElementById('customPrompt');
+const includeTimestampsToggle = document.getElementById('includeTimestamps');
 const keyInputs = {
   gemini: document.getElementById('geminiKey'),
   gpt: document.getElementById('openaiKey'),
@@ -27,7 +28,8 @@ async function load() {
       'openaiKey',
       'claudeKey',
       'summaryMode',
-      'customPrompt'
+      'customPrompt',
+      'includeTimestamps'
     ]);
 
     toggle.checked = Boolean(stored.autoSummarize);
@@ -49,7 +51,10 @@ async function load() {
 
     updateStatus(toggle.checked);
     highlightActiveKey();
-    // No chrome language state
+    // Timestamps preference
+    if (includeTimestampsToggle) {
+      includeTimestampsToggle.checked = stored.includeTimestamps !== false;
+    }
 
     // Ensure we have persistent access to youtube.com (requests once, then persists).
     await ensureYouTubePermission();
@@ -124,6 +129,15 @@ if (customPromptTextarea) {
   };
   customPromptTextarea.addEventListener('change', handler);
   customPromptTextarea.addEventListener('blur', handler);
+}
+
+if (includeTimestampsToggle) {
+  includeTimestampsToggle.addEventListener('change', () => {
+    const value = Boolean(includeTimestampsToggle.checked);
+    chrome.storage.sync
+      .set({ includeTimestamps: value })
+      .catch(error => console.error('[YAIVS] Failed to save includeTimestamps', error));
+  });
 }
 
 // No Chrome language selection

@@ -14,7 +14,8 @@
     autoSummarize: false,
     provider: 'gemini',
     summaryMode: 'simple',
-    customPrompt: ''
+    customPrompt: '',
+    includeTimestamps: true
   };
   const DECODER = document.createElement('textarea');
   const AUTH_PATTERNS = [
@@ -116,12 +117,16 @@
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function formatSummaryHtml(summary) {
+  function formatSummaryHtml(summary, linkify = true) {
     if (!summary) return '';
     const escaped = escapeHtml(summary);
+    const tsPattern = /\[((\d{1,3}):(\d{2})(?::(\d{2}))?)(?:\s*[–-]\s*((\d{1,3}):(\d{2})(?::(\d{2}))?))?\]/g;
 
-    // Linkify [mm:ss], [hh:mm:ss], and ranges like [mm:ss–mm:ss] or [hh:mm:ss - hh:mm:ss]
-    const withLinks = escaped.replace(/\[((\d{1,3}):(\d{2})(?::(\d{2}))?)(?:\s*[–-]\s*((\d{1,3}):(\d{2})(?::(\d{2}))?))?\]/g, (
+    if (!linkify) {
+      return escaped.replace(tsPattern, '').replace(/\n/g, '<br>');
+    }
+
+    const withLinks = escaped.replace(tsPattern, (
       match,
       fullA,
       a1,
@@ -258,7 +263,8 @@
           'autoSummarize',
           'provider',
           'summaryMode',
-          'customPrompt'
+          'customPrompt',
+          'includeTimestamps'
         ]);
         if (Object.prototype.hasOwnProperty.call(stored, 'autoSummarize')) {
           this.values.autoSummarize = Boolean(stored.autoSummarize);
@@ -266,11 +272,13 @@
         this.values.provider = stored.provider || this.defaults.provider || 'gemini';
         this.values.summaryMode = stored.summaryMode || this.defaults.summaryMode || 'simple';
         this.values.customPrompt = stored.customPrompt || this.defaults.customPrompt || '';
+        this.values.includeTimestamps = stored.includeTimestamps !== false;
       } catch (error) {
         console.warn('[YAIVS] Failed to load settings', error);
         this.values.provider = this.defaults.provider || 'gemini';
         this.values.summaryMode = this.defaults.summaryMode || 'simple';
         this.values.customPrompt = this.defaults.customPrompt || '';
+        this.values.includeTimestamps = true;
       }
       return this.values;
     }
@@ -298,6 +306,11 @@
 
       if (Object.prototype.hasOwnProperty.call(changes, 'customPrompt')) {
         this.values.customPrompt = changes.customPrompt.newValue || '';
+        patched = true;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(changes, 'includeTimestamps')) {
+        this.values.includeTimestamps = Boolean(changes.includeTimestamps.newValue);
         patched = true;
       }
 
@@ -854,7 +867,8 @@
         return;
       }
       this.lastRawSummary = text;
-      this.summaryEl.innerHTML = formatSummaryHtml(text);
+      const linkify = this.settings.get('includeTimestamps') !== false;
+      this.summaryEl.innerHTML = formatSummaryHtml(text, linkify);
       this.summaryEl.hidden = false;
       if (this.toolsRow) this.toolsRow.hidden = false;
     }
@@ -895,7 +909,8 @@
         transcript,
         durationSeconds,
         summaryMode: (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'simple'),
-        customPrompt: (overrides && overrides.customPrompt) || (this.settings.get('customPrompt') || '').trim()
+        customPrompt: (overrides && overrides.customPrompt) || (this.settings.get('customPrompt') || '').trim(),
+        includeTimestamps: this.settings.get('includeTimestamps') !== false
       });
 
       if (!response) throw new Error('No response from background service.');
@@ -1054,7 +1069,8 @@
         provider,
         transcript,
         durationSeconds,
-        question
+        question,
+        includeTimestamps: this.settings.get('includeTimestamps') !== false
       });
       if (!response) throw new Error('No response from background service.');
       if (response.status === 'error') throw new Error(response.message);

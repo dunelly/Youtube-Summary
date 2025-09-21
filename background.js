@@ -4,14 +4,15 @@ const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
 const DEFAULT_PROVIDER = 'gemini';
 
-async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt }) {
-  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'summaryMode', 'customPrompt']);
+async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt, includeTimestamps }) {
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'summaryMode', 'customPrompt', 'includeTimestamps']);
   const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
   const storedCustom = typeof customPrompt === 'string' ? customPrompt : settings.customPrompt;
   const mode = ['simple', 'detailed', 'custom'].includes(selectedMode) ? selectedMode : 'simple';
   const custom = (storedCustom || '').toString().trim();
   const effectiveMode = mode === 'custom' && !custom ? 'simple' : mode;
-  const prompt = buildPromptInstructions(effectiveMode, durationSeconds, custom);
+  const useTimestamps = includeTimestamps !== false && settings.includeTimestamps !== false;
+  const prompt = buildPromptInstructions(effectiveMode, durationSeconds, custom, useTimestamps);
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
 
   switch (provider) {
@@ -24,7 +25,7 @@ async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, duratio
   }
 }
 
-function buildPromptInstructions(mode, durationSeconds, customPrompt) {
+function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTimestamps = true) {
   const total = Number(durationSeconds) || 0;
   const timeHints = buildTimeHints(total);
   const sharedGeneral = [
@@ -48,10 +49,10 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt) {
     const lines = [
       `User instructions (apply first): ${customPrompt}`,
       ...sharedGeneral,
-      'Include timestamps in [mm:ss] or [hh:mm:ss] when possible (unless the user specifies otherwise).',
+      includeTimestamps ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when possible (unless the user specifies otherwise).' : 'Do not include timestamps.',
       'If the user instructions conflict with formatting guidance, follow the user. Emoji/bullet style is optional unless requested.',
       'Keep writing tight, avoid fluff. If structure is unspecified, 5–7 short sections are acceptable.',
-      timeHints
+      includeTimestamps ? timeHints : ''
     ];
     return lines.filter(Boolean).join('\n');
   }
@@ -59,14 +60,14 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt) {
   // simple (default)
   const lines = [
     ...sharedGeneral,
-    'Include timestamps in [mm:ss] or [hh:mm:ss] when possible.',
+    includeTimestamps ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when possible.' : 'Do not include timestamps.',
     'Use 5–7 thematic sections relevant to the transcript. Each heading must begin with an expressive emoji, a space, and a short label.',
     'Do not invent or include irrelevant categories. Never add empty or "N/A" sections.',
     'Under each heading produce 2–4 factual bullets. Each bullet must start with a single tab character followed by "• " (example: "\t• Brighter 3,000-nit display.").',
     'Keep bullets under ~18 words.',
     'Finish with an "👉 Takeaway" section summarizing the key conclusion.',
     'Call out uncertainties or missing transcript portions inside the affected section/bullet.',
-    timeHints,
+    includeTimestamps ? timeHints : '',
     'Do not append questions or calls-to-action after the "👉 Takeaway" section.'
   ];
   return lines.filter(Boolean).join('\n');
@@ -92,9 +93,9 @@ function buildTimeHints(total) {
   ].join('\n');
 }
 
-async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, question }) {
+async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, question, includeTimestamps }) {
   const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey']);
-  const prompt = buildQuestionPrompt(question, durationSeconds);
+  const prompt = buildQuestionPrompt(question, durationSeconds, includeTimestamps !== false);
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
 
   switch (provider) {
@@ -107,10 +108,10 @@ async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSecon
   }
 }
 
-function buildQuestionPrompt(question, durationSeconds) {
+function buildQuestionPrompt(question, durationSeconds, includeTimestamps = true) {
   const q = (question || '').toString().trim();
   const total = Number(durationSeconds) || 0;
-  const timeHint = total > 0 ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when citing specific moments.' : '';
+  const timeHint = includeTimestamps && total > 0 ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when citing specific moments.' : 'Do not include timestamps when answering.';
   const lines = [
     'You are answering a user question using ONLY the YouTube video transcript provided below.',
     `Question: ${q}`,
