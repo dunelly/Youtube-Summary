@@ -702,7 +702,6 @@
           <button type="button" data-style="recipe">Recipe</button>
           <button type="button" data-style="outline">Outline</button>
         </div>
-        <div class="yaivs-hint" id="yaivs-hint">Press Enter to ask</div>
         <div class="yaivs-tools" id="yaivs-tools" hidden>
           <button type="button" id="yaivs-copy" class="yaivs-tool">Copy</button>
         </div>
@@ -816,7 +815,7 @@
       this.updateInfoMessage();
       if (this.generateBtn) {
         this.generateBtn.disabled = false;
-        this.generateBtn.textContent = 'Summarize';
+        this.generateBtn.textContent = 'SUMMARIZE';
       }
       // no separate ask button
       if (this.promptInput) this.promptInput.disabled = false;
@@ -1124,7 +1123,7 @@
         border-bottom: 1px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.08));
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
         position: relative;
       }
 
@@ -1200,7 +1199,7 @@
         color: var(--yt-spec-text-secondary, #606060);
       }
 
-      /* provider chip removed */
+      /* hint/provider chips removed */
 
       .yaivs-prompt {
         display: flex;
@@ -1241,21 +1240,7 @@
         box-shadow: 0 1px 2px rgba(0,0,0,0.2);
       }
 
-      .yaivs-clear {
-        border: none;
-        background: transparent;
-        color: var(--yt-spec-text-secondary, #606060);
-        font-size: 18px;
-        line-height: 1;
-        padding: 0 6px;
-        cursor: pointer;
-      }
-
-      .yaivs-hint {
-        margin: -4px 0 0;
-        font-size: 11px;
-        color: var(--yt-spec-text-secondary, #606060);
-      }
+      /* clear/hint removed */
 
       .yaivs-style-menu {
         position: absolute;
