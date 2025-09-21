@@ -675,7 +675,6 @@
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
         <div class="yaivs-prompt" id="yaivs-prompt-row">
           <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
-          <button class="yaivs-clear" type="button" id="yaivs-clear" aria-label="Clear">×</button>
           <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">Ask/Summarize</button>
           <button class="yaivs-button yaivs-button--ghost yaivs-button--split" type="button" id="yaivs-style" aria-label="Style menu">▼</button>
         </div>
@@ -707,7 +706,7 @@
       this.askBtn = null;
       this.styleBtn = panel.querySelector('#yaivs-style');
       this.styleMenu = panel.querySelector('#yaivs-style-menu');
-      this.clearBtn = panel.querySelector('#yaivs-clear');
+      this.clearBtn = null;
       this.toolsRow = panel.querySelector('#yaivs-tools');
       this.copyBtn = panel.querySelector('#yaivs-copy');
       this.toggleBtn = panel.querySelector('#yaivs-toggle');
@@ -743,12 +742,7 @@
         this.styleMenu.addEventListener('click', e => this.handleStyleMenuClick(e));
       }
 
-      if (this.clearBtn) {
-        this.clearBtn.addEventListener('click', () => {
-          if (this.promptInput) this.promptInput.value = '';
-          this.promptInput?.focus();
-        });
-      }
+      // no clear button
 
       if (this.copyBtn) {
         this.copyBtn.addEventListener('click', () => this.copySummary());
@@ -1029,7 +1023,7 @@
     }
 
     async handlePromptSubmit() {
-      if (!this.askBtn || this.askBtn.disabled) return;
+      if (this.generateBtn?.disabled) return;
       const value = (this.promptInput?.value || '').trim();
       if (!value) return;
 
