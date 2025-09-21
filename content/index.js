@@ -824,6 +824,7 @@
       // Reveal the Ask input the first time user clicks Summarize
       if (this.promptInput && this.promptInput.hasAttribute('hidden')) {
         this.promptInput.removeAttribute('hidden');
+        this.promptInput.focus();
       }
       if (q) {
         this.handlePromptSubmit();
@@ -1119,13 +1120,13 @@
       }
 
       .yaivs-button {
-        padding: 6px 14px;
-        border-radius: 16px;
+        padding: 8px 16px;
+        border-radius: 20px;
         border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
         background: var(--yt-spec-general-background-a, rgba(255, 255, 255, 0.08));
         color: var(--yt-spec-text-primary, #0f0f0f);
         font-family: inherit;
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 600;
         letter-spacing: 0.3px;
         text-transform: none;
@@ -1185,14 +1186,15 @@
         align-items: center;
         gap: 8px;
         margin-top: 0;
+        justify-content: flex-end;
       }
 
       .yaivs-input {
         flex: 1;
         min-width: 160px;
         max-width: 820px;
-        padding: 8px 12px;
-        border-radius: 10px;
+        padding: 10px 14px;
+        border-radius: 20px;
         border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
         background: var(--yt-spec-brand-background-primary, rgba(255, 255, 255, 0.06));
         color: var(--yt-spec-text-primary, #0f0f0f);
