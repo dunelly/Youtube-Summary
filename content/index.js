@@ -687,8 +687,11 @@
       container.innerHTML = `
         <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
         <div class="yaivs-prompt" id="yaivs-prompt-row">
-          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" hidden />
-          <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">Summarize</button>
+          <div class="yaivs-input-wrap">
+            <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" hidden />
+            <button class="yaivs-send" id="yaivs-send" aria-label="Send" hidden>↑</button>
+          </div>
+          <button class="yaivs-button yaivs-button--primary" type="button" id="yaivs-generate">SUMMARIZE</button>
           <button class="yaivs-button yaivs-button--ghost yaivs-button--split" type="button" id="yaivs-style" aria-label="Style menu">▼</button>
         </div>
         <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
@@ -714,6 +717,7 @@
       this.statusEl = panel.querySelector('#yaivs-status');
       this.generateBtn = panel.querySelector('#yaivs-generate');
       this.promptInput = panel.querySelector('#yaivs-prompt-input');
+      this.sendBtn = panel.querySelector('#yaivs-send');
       this.askBtn = null;
       this.styleBtn = panel.querySelector('#yaivs-style');
       this.styleMenu = panel.querySelector('#yaivs-style-menu');
@@ -736,6 +740,7 @@
             this.handlePromptSubmit();
           }
         });
+        this.promptInput.addEventListener('input', () => this.updateSendVisibility());
       }
 
       if (!panel.dataset.listenersBound) {
@@ -753,7 +758,10 @@
         this.styleMenu.addEventListener('click', e => this.handleStyleMenuClick(e));
       }
 
-      // no clear button
+      // send within input
+      if (this.sendBtn) {
+        this.sendBtn.addEventListener('click', () => this.handlePromptSubmit());
+      }
 
       if (this.copyBtn) {
         this.copyBtn.addEventListener('click', () => this.copySummary());
@@ -812,6 +820,7 @@
       }
       // no separate ask button
       if (this.promptInput) this.promptInput.disabled = false;
+      if (this.sendBtn) this.sendBtn.hidden = true;
       if (this.toolsRow) this.toolsRow.hidden = true;
       this.lastRawSummary = '';
     }
@@ -824,6 +833,7 @@
       // Reveal the Ask input the first time user clicks Summarize
       if (this.promptInput && this.promptInput.hasAttribute('hidden')) {
         this.promptInput.removeAttribute('hidden');
+        this.updateSendVisibility();
         this.promptInput.focus();
       }
       if (q) {
@@ -887,8 +897,9 @@
     setLoading(isLoading, message) {
       if (!this.generateBtn) return;
       this.generateBtn.disabled = isLoading;
-      this.generateBtn.textContent = isLoading ? 'Working…' : 'Ask/Summarize';
+      this.generateBtn.textContent = isLoading ? 'WORKING…' : 'SUMMARIZE';
       if (this.promptInput) this.promptInput.disabled = isLoading;
+      if (this.sendBtn) this.sendBtn.disabled = isLoading;
       if (message) {
         this.updateStatus(message, 'loading');
       }
@@ -1033,6 +1044,16 @@
           };
           default:
             return null;
+      }
+    }
+
+    updateSendVisibility() {
+      if (!this.promptInput || !this.sendBtn) return;
+      const hasText = (this.promptInput.value || '').trim().length > 0;
+      if (this.promptInput.hasAttribute('hidden')) {
+        this.sendBtn.hidden = true;
+      } else {
+        this.sendBtn.hidden = !hasText;
       }
     }
 
@@ -1189,16 +1210,35 @@
         justify-content: flex-end;
       }
 
+      .yaivs-input-wrap { position: relative; flex: 1; }
+
       .yaivs-input {
         flex: 1;
         min-width: 160px;
         max-width: 820px;
-        padding: 10px 14px;
+        padding: 10px 42px 10px 14px; /* right padding for send button */
         border-radius: 20px;
         border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
         background: var(--yt-spec-brand-background-primary, rgba(255, 255, 255, 0.06));
         color: var(--yt-spec-text-primary, #0f0f0f);
         font: inherit;
+      }
+
+      .yaivs-send {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: #ffffff;
+        color: #111;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
       }
 
       .yaivs-clear {
