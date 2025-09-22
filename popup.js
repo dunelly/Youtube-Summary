@@ -177,10 +177,10 @@ if (useExperimentalRefactorToggle) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id && /https?:\/\/(?:www\.|m\.)?youtube\.com\//i.test(tab.url || '')) {
         try {
-          await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/index.js'] });
+          await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/v2/app.js'] });
         } catch {}
       }
-      statusEl.textContent = enabled ? 'Experimental v2 enabled (this browser only).' : 'Experimental v2 disabled.';
+      statusEl.textContent = 'Refactored v2 is the default now. Toggle will be removed in release.';
     } catch (e) {
       console.warn('Failed to toggle experimental refactor', e);
     }
@@ -236,7 +236,7 @@ async function maybeInjectOnActiveYouTubeTab() {
     if (!isYouTube) return;
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ['content/index.js']
+      files: ['content/v2/app.js']
     });
   } catch (error) {
     console.debug('[YAIVS] Injection skipped/failed (likely already injected):', error?.message || String(error));
