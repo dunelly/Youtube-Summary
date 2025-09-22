@@ -7,7 +7,8 @@ import {
   parseJsonResponse,
   fetchHtml,
   extractJsonFromHtml,
-  getVideoIdFromUrl
+  getVideoIdFromUrl,
+  containsAuthMessage
 } from '../utils.js';
 
 const YOUTUBE_TRANSCRIPT_ENDPOINT = 'https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false';
@@ -35,8 +36,7 @@ export class TranscriptService {
       .trim();
 
     if (!text) throw new Error('No transcript available for this video.');
-    // containsAuthMessage lives in utils; we avoid importing it to keep v2 lightweight.
-    // The caller can check auth conditions if needed.
+    if (containsAuthMessage(text)) throw new Error('Transcript requires you to sign in to YouTube.');
 
     const durationSeconds = segments.reduce((max, segment) => {
       if (typeof segment.seconds === 'number') {
@@ -275,4 +275,3 @@ export class TranscriptService {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 }
-
