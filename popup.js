@@ -6,6 +6,7 @@ const summaryModeSelect = document.getElementById('summaryMode');
 const customPromptContainer = document.getElementById('customPromptContainer');
 const customPromptTextarea = document.getElementById('customPrompt');
 const includeTimestampsToggle = document.getElementById('includeTimestamps');
+const useExperimentalRefactorToggle = document.getElementById('useExperimentalRefactor');
 const keyInputs = {
   gemini: document.getElementById('geminiKey'),
   gpt: document.getElementById('openaiKey'),
@@ -76,6 +77,14 @@ async function load() {
 
     // Ensure we have persistent access to youtube.com (requests once, then persists).
     await ensureYouTubePermission();
+
+    // Load local-only developer flag
+    try {
+      const local = await chrome.storage.local.get(['useExperimentalRefactor']);
+      if (useExperimentalRefactorToggle) {
+        useExperimentalRefactorToggle.checked = Boolean(local.useExperimentalRefactor);
+      }
+    } catch {}
 
     // Try to inject the in-page panel when popup opens on a YouTube tab.
     // Works even if site access is still "On click" before the user accepts.
@@ -155,6 +164,26 @@ if (includeTimestampsToggle) {
     chrome.storage.sync
       .set({ includeTimestamps: value })
       .catch(error => console.error('[YAIVS] Failed to save includeTimestamps', error));
+  });
+}
+
+// Developer: experimental v2 toggle stored in chrome.storage.local
+if (useExperimentalRefactorToggle) {
+  useExperimentalRefactorToggle.addEventListener('change', async () => {
+    const enabled = Boolean(useExperimentalRefactorToggle.checked);
+    try {
+      await chrome.storage.local.set({ useExperimentalRefactor: enabled });
+      // Attempt live-switch by reinjecting content script on the active YouTube tab
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id && /https?:\/\/(?:www\.|m\.)?youtube\.com\//i.test(tab.url || '')) {
+        try {
+          await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/index.js'] });
+        } catch {}
+      }
+      statusEl.textContent = enabled ? 'Experimental v2 enabled (this browser only).' : 'Experimental v2 disabled.';
+    } catch (e) {
+      console.warn('Failed to toggle experimental refactor', e);
+    }
   });
 }
 

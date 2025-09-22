@@ -182,6 +182,12 @@
     </section>
 
     <p class="hint">Keys are stored locally via Chrome sync.</p>
+    <h2>Developer</h2>
+    <label>
+      <input type="checkbox" id="useExperimentalRefactor" />
+      Enable experimental v2 (local only)
+    </label>
+    <p>Switches content script to the refactored v2 loader on this browser. Uses chrome.storage.local and does not sync.</p>
     <script src="popup.js" type="module"></script>
   </body>
 </html>
