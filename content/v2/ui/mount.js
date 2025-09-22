@@ -178,6 +178,12 @@ export function injectStyles() {
       .yaivs-tool { border: none; background: transparent; color: var(--yt-spec-text-secondary, #606060); font: inherit; font-size: 12px; cursor: pointer; }
       .yaivs-summary .yaivs-timestamp { color: var(--yt-spec-call-to-action, #3ea6ff); text-decoration: none; font-weight: 500; cursor: pointer; }
       .yaivs-summary .yaivs-timestamp:hover { text-decoration: underline; }
+
+      .yaivs-onboarding { border: 1px dashed rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; background: rgba(62,166,255,0.06); }
+      .yaivs-onb-text { font-size: 13px; margin-bottom: 8px; }
+      .yaivs-onb-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .yaivs-onb-btn { border: 1px solid rgba(0,0,0,0.15); background: #fff; color: #111; border-radius: 16px; padding: 6px 10px; font: inherit; cursor: pointer; }
+      .yaivs-onb-hint { font-size: 12px; color: #666; }
     `;
 
   document.head.appendChild(style);

@@ -510,6 +510,32 @@ async function summarizeWithOllama(prompt, url, model) {
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request?.type === 'saveOpenRouterKey') {
+    const key = (request.key || '').trim();
+    if (!key || !/^sk-or-/i.test(key)) {
+      sendResponse && sendResponse({ status: 'error', message: 'Invalid OpenRouter key.' });
+      return true;
+    }
+    chrome.storage.sync
+      .set({ openrouterKey: key })
+      .then(() => sendResponse && sendResponse({ status: 'ok' }))
+      .catch(error => sendResponse && sendResponse({ status: 'error', message: error.message }));
+    return true;
+  }
+
+  if (request?.type === 'testOpenRouterKey') {
+    (async () => {
+      try {
+        const { openrouterKey, openrouterModel } = await chrome.storage.sync.get(['openrouterKey', 'openrouterModel']);
+        const model = openrouterModel || 'google/gemma-2-9b-it:free';
+        const summary = await summarizeWithOpenRouter('Reply with OK', openrouterKey, model);
+        sendResponse && sendResponse({ status: 'ok', result: (summary || '').slice(0, 100) });
+      } catch (e) {
+        sendResponse && sendResponse({ status: 'error', message: e?.message || String(e) });
+      }
+    })();
+    return true;
+  }
   if (request?.type === 'saveGeminiKey') {
     const key = request.key?.trim();
     if (!key) {

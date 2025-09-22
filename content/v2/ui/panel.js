@@ -101,6 +101,15 @@ export class SummaryPanel {
       <div class="yaivs-tools" id="yaivs-tools" hidden>
         <button type="button" id="yaivs-copy" class="yaivs-tool">Copy</button>
       </div>
+      <div class="yaivs-onboarding" id="yaivs-onboarding" hidden>
+        <div class="yaivs-onb-text">Connect a free OpenRouter key to start summarizing.</div>
+        <div class="yaivs-onb-actions">
+          <button type="button" class="yaivs-onb-btn" id="yaivs-onb-get">Get free key</button>
+          <button type="button" class="yaivs-onb-btn" id="yaivs-onb-paste">Paste from clipboard</button>
+          <button type="button" class="yaivs-onb-btn" id="yaivs-onb-test">Test key</button>
+        </div>
+        <div class="yaivs-onb-hint">We’ll auto-detect the key on the OpenRouter keys page.</div>
+      </div>
       <div class="yaivs-summary" id="yaivs-summary" hidden></div>
     `;
     return container;
@@ -121,6 +130,10 @@ export class SummaryPanel {
     this.toolsRow = panel.querySelector('#yaivs-tools');
     this.copyBtn = panel.querySelector('#yaivs-copy');
     this.toggleBtn = null;
+    this.onboardingEl = panel.querySelector('#yaivs-onboarding');
+    this.onbGetBtn = panel.querySelector('#yaivs-onb-get');
+    this.onbPasteBtn = panel.querySelector('#yaivs-onb-paste');
+    this.onbTestBtn = panel.querySelector('#yaivs-onb-test');
 
     if (this.generateHandler) {
       this.generateBtn.removeEventListener('click', this.generateHandler);
@@ -163,8 +176,12 @@ export class SummaryPanel {
     if (this.copyBtn) {
       this.copyBtn.addEventListener('click', () => this.copySummary());
     }
+    if (this.onbGetBtn) this.onbGetBtn.addEventListener('click', () => this.handleOnboardingGetKey());
+    if (this.onbPasteBtn) this.onbPasteBtn.addEventListener('click', () => this.handleOnboardingPaste());
+    if (this.onbTestBtn) this.onbTestBtn.addEventListener('click', () => this.handleOnboardingTest());
 
     this.updateInfoMessage();
+    this.updateOnboardingVisibility();
   }
 
   ensureAboveDescription(container) {
@@ -214,6 +231,7 @@ export class SummaryPanel {
     if (this.sendBtn) this.sendBtn.hidden = true;
     if (this.toolsRow) this.toolsRow.hidden = true;
     this.lastRawSummary = '';
+    this.updateOnboardingVisibility();
   }
 
   async handleSummarize(overrides) {
@@ -328,6 +346,76 @@ export class SummaryPanel {
     } else {
       this.statusEl.textContent = `Click to summarize with ${providerLabel} — ${modeLabel}.`;
       this.statusEl.className = 'yaivs-status yaivs-status--info';
+    }
+  }
+
+  async updateOnboardingVisibility() {
+    try {
+      await this.settings.ready;
+      const provider = this.settings.get('provider') || 'openrouter';
+      const needOnboard = await this.needsOpenRouterOnboarding(provider);
+      if (this.onboardingEl) this.onboardingEl.hidden = !needOnboard;
+      if (this.unifiedBtn) this.unifiedBtn.disabled = !!needOnboard;
+      if (needOnboard && this.statusEl) {
+        this.statusEl.textContent = 'Connect OpenRouter to start summarizing.';
+        this.statusEl.className = 'yaivs-status yaivs-status--info';
+      }
+    } catch {}
+  }
+
+  async needsOpenRouterOnboarding(provider) {
+    if (provider !== 'openrouter') return false;
+    const stored = await chrome.storage.sync.get(['openrouterKey']);
+    const key = (stored.openrouterKey || '').trim();
+    return !key || !/^sk-or-/i.test(key);
+  }
+
+  async handleOnboardingGetKey() {
+    try {
+      const origin = 'https://openrouter.ai/*';
+      const has = await chrome.permissions.contains({ origins: [origin] });
+      if (!has) {
+        const granted = await chrome.permissions.request({ origins: [origin] });
+        if (!granted) {
+          this.updateStatus('Permission denied. Use Paste from clipboard.', 'error');
+          return;
+        }
+      }
+      const tab = await chrome.tabs.create({ url: 'https://openrouter.ai/keys', active: true });
+      if (tab?.id) {
+        setTimeout(() => {
+          chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/onboarding/openrouter_sniffer.js'] }).catch(() => {});
+        }, 1200);
+      }
+      this.updateStatus('Opened OpenRouter keys page. We will auto-detect the key.', 'success');
+    } catch (e) {
+      this.updateStatus('Failed to open OpenRouter keys page.', 'error');
+    }
+  }
+
+  async handleOnboardingPaste() {
+    try {
+      const text = await navigator.clipboard.readText();
+      const key = (text || '').trim();
+      if (!/^sk-or-/i.test(key)) {
+        this.updateStatus('Clipboard does not contain an OpenRouter key.', 'error');
+        return;
+      }
+      await chrome.storage.sync.set({ openrouterKey: key });
+      this.updateStatus('OpenRouter key saved.', 'success');
+      this.updateOnboardingVisibility();
+    } catch (e) {
+      this.updateStatus('Clipboard blocked. Paste into Settings instead.', 'error');
+    }
+  }
+
+  async handleOnboardingTest() {
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'testOpenRouterKey' });
+      if (res?.status === 'ok') this.updateStatus('Key works ✓', 'success');
+      else this.updateStatus(res?.message || 'Key test failed.', 'error');
+    } catch (e) {
+      this.updateStatus('Key test failed.', 'error');
     }
   }
 
@@ -500,4 +588,3 @@ export class SummaryPanel {
     }
   }
 }
-
