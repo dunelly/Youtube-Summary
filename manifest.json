@@ -32,5 +32,17 @@
       "type": "module",
       "run_at": "document_idle"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/v1/*",
+        "content/v2/*"
+      ],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ]
+    }
   ]
 }
