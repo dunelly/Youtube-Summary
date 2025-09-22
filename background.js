@@ -33,6 +33,32 @@ async function generateIconImageData(size, bgColor, fgColor, letter) {
   ctx.fillStyle = bgColor;
   ctx.fill();
 
+  // Tiny stars (gold) around the Y
+  try {
+    const gold = '#FFD54D';
+    const s = size;
+    const base = Math.max(1, Math.round(s * 0.06)); // outer radius
+    const inner = Math.max(1, Math.round(base * 0.48));
+    // positions relative to size
+    const stars = [
+      { x: Math.round(s * 0.24), y: Math.round(s * 0.22), scale: 1.0, rot: -0.3 },
+      { x: Math.round(s * 0.76), y: Math.round(s * 0.26), scale: 0.9, rot: 0.4 },
+      { x: Math.round(s * 0.78), y: Math.round(s * 0.78), scale: 0.85, rot: 0.0 }
+    ];
+    for (const star of stars) {
+      drawStar(
+        ctx,
+        star.x,
+        star.y,
+        5,
+        Math.max(1, Math.round(base * star.scale)),
+        Math.max(1, Math.round(inner * star.scale)),
+        gold,
+        star.rot
+      );
+    }
+  } catch {}
+
   // Letter Y
   ctx.fillStyle = fgColor;
   ctx.textAlign = 'center';
@@ -56,6 +82,34 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.lineTo(x, y + radius);
   ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
+}
+
+function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius, color, rotation = 0) {
+  let rot = Math.PI / 2 * 3 + rotation;
+  let x = cx;
+  let y = cy;
+  const step = Math.PI / spikes;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - outerRadius);
+  for (let i = 0; i < spikes; i++) {
+    x = cx + Math.cos(rot) * outerRadius;
+    y = cy + Math.sin(rot) * outerRadius;
+    ctx.lineTo(x, y);
+    rot += step;
+
+    x = cx + Math.cos(rot) * innerRadius;
+    y = cy + Math.sin(rot) * innerRadius;
+    ctx.lineTo(x, y);
+    rot += step;
+  }
+  ctx.lineTo(cx, cy - outerRadius);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.shadowColor = 'rgba(0,0,0,0.18)';
+  ctx.shadowBlur = Math.max(0, Math.round(outerRadius * 0.5));
+  ctx.fill();
+  // reset shadow
+  ctx.shadowBlur = 0;
 }
 
 chrome.runtime.onInstalled.addListener(() => {
