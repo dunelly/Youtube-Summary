@@ -5,6 +5,67 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const DEFAULT_PROVIDER = 'gemini';
 
+// ---------------------------------------------------------------------------
+// Dynamic toolbar icon (colored Y)
+// ---------------------------------------------------------------------------
+async function setColoredYIcon() {
+  try {
+    const sizes = [16, 32, 48, 128];
+    const images = {};
+    for (const size of sizes) {
+      images[size] = await generateIconImageData(size, '#E62117', '#FFFFFF', 'Y');
+    }
+    await chrome.action.setIcon({ imageData: images });
+  } catch (e) {
+    // Non-fatal; ignore if OffscreenCanvas unsupported
+    console.debug('[YAIVS] setColoredYIcon failed:', e?.message || String(e));
+  }
+}
+
+async function generateIconImageData(size, bgColor, fgColor, letter) {
+  const canvas = new OffscreenCanvas(size, size);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2D context unavailable');
+
+  // BG: rounded rect (slight radius)
+  const r = Math.round(size * 0.18);
+  roundRect(ctx, 0, 0, size, size, r);
+  ctx.fillStyle = bgColor;
+  ctx.fill();
+
+  // Letter Y
+  ctx.fillStyle = fgColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${Math.floor(size * 0.68)}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+  ctx.fillText(letter, size / 2, Math.round(size * 0.56));
+
+  return ctx.getImageData(0, 0, size, size);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const radius = Math.max(0, Math.min(r, Math.floor(Math.min(w, h) / 2)));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  setColoredYIcon();
+});
+
+chrome.runtime.onStartup?.addListener?.(() => {
+  setColoredYIcon();
+});
+
 async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt, includeTimestamps }) {
   const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel', 'summaryMode', 'customPrompt', 'includeTimestamps']);
   const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
