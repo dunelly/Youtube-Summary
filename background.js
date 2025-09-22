@@ -6,7 +6,7 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_PROVIDER = 'gemini';
 
 async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt, includeTimestamps }) {
-  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'summaryMode', 'customPrompt', 'includeTimestamps']);
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel', 'summaryMode', 'customPrompt', 'includeTimestamps']);
   const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
   const storedCustom = typeof customPrompt === 'string' ? customPrompt : settings.customPrompt;
   const mode = ['simple', 'detailed', 'custom'].includes(selectedMode) ? selectedMode : 'simple';
@@ -23,6 +23,8 @@ async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, duratio
       return summarizeWithAnthropic(userText, settings.claudeKey);
     case 'openrouter':
       return summarizeWithOpenRouter(userText, settings.openrouterKey, settings.openrouterModel);
+    case 'ollama':
+      return summarizeWithOllama(userText, settings.ollamaUrl, settings.ollamaModel);
     default:
       return summarizeWithGemini(userText, settings.geminiKey);
   }
@@ -97,7 +99,7 @@ function buildTimeHints(total) {
 }
 
 async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, question, includeTimestamps }) {
-  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel']);
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel']);
   const prompt = buildQuestionPrompt(question, durationSeconds, includeTimestamps !== false);
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
 
@@ -108,6 +110,8 @@ async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSecon
       return summarizeWithAnthropic(userText, settings.claudeKey);
     case 'openrouter':
       return summarizeWithOpenRouter(userText, settings.openrouterKey, settings.openrouterModel);
+    case 'ollama':
+      return summarizeWithOllama(userText, settings.ollamaUrl, settings.ollamaModel);
     default:
       return summarizeWithGemini(userText, settings.geminiKey);
   }
@@ -297,6 +301,43 @@ async function summarizeWithOpenRouter(prompt, key, model) {
   const data = await response.json();
   const summary = data?.choices?.[0]?.message?.content || '';
   if (!summary.trim()) throw new Error('OpenRouter response was empty.');
+  return summary;
+}
+
+async function summarizeWithOllama(prompt, url, model) {
+  if (!url) {
+    throw new Error('Ollama server URL is missing.');
+  }
+  
+  const ollamaUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+  const endpoint = `${ollamaUrl}/api/generate`;
+  
+  const requestBody = {
+    model: model || 'llama3.2',
+    prompt: prompt,
+    stream: false,
+    options: {
+      temperature: 0.3,
+      top_p: 0.9
+    }
+  };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Ollama request failed (${response.status}): ${text.slice(0, 200)}`);
+  }
+  
+  const data = await response.json();
+  const summary = data?.response || '';
+  if (!summary.trim()) throw new Error('Ollama response was empty.');
   return summary;
 }
 

@@ -600,7 +600,7 @@
   // Provider utilities
   // ---------------------------------------------------------------------------
   async function ensureProviderKey(provider) {
-    const keyName = provider === 'gpt' ? 'openaiKey' : provider === 'claude' ? 'claudeKey' : provider === 'openrouter' ? 'openrouterKey' : 'geminiKey';
+    const keyName = provider === 'gpt' ? 'openaiKey' : provider === 'claude' ? 'claudeKey' : provider === 'openrouter' ? 'openrouterKey' : provider === 'ollama' ? 'ollamaUrl' : 'geminiKey';
     const stored = await chrome.storage.sync.get([keyName]);
     let value = stored[keyName];
 
@@ -614,7 +614,7 @@
     }
 
     if (!value) {
-    const label = provider === 'gpt' ? 'OpenAI' : provider === 'claude' ? 'Anthropic' : provider === 'openrouter' ? 'OpenRouter' : 'Gemini';
+    const label = provider === 'gpt' ? 'OpenAI' : provider === 'claude' ? 'Anthropic' : provider === 'openrouter' ? 'OpenRouter' : provider === 'ollama' ? 'Ollama' : 'Gemini';
     throw new Error(`${label} API key is required. Add it from the extension popup.`);
   }
 
@@ -675,6 +675,10 @@
 
       this.bindElements(panel);
       this.resetState();
+      
+      // Ensure send button visibility is correct since Ask input is always visible
+      this.updateSendVisibility();
+      
       // Ensure the panel is placed immediately above the description once it appears.
       this.ensureAboveDescription(mountPoint.container);
       this.maybeAutoSummarize();
@@ -699,7 +703,7 @@
         <div class="yaivs-actions" id="yaivs-actions">
           <div class="yaivs-prompt" id="yaivs-prompt-row">
             <div class="yaivs-input-wrap">
-              <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" hidden />
+              <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
               <button class="yaivs-send" id="yaivs-send" aria-label="Send" hidden>↑</button>
             </div>
           </div>
@@ -824,7 +828,7 @@
       }
       if (this.promptInput) {
         this.promptInput.value = '';
-        this.promptInput.setAttribute('hidden', '');
+        // Keep Ask input always visible
       }
       this.updateInfoMessage();
       if (this.unifiedBtn) {
@@ -842,17 +846,10 @@
     async handleSummarize(overrides) {
       if (!this.unifiedBtn || this.unifiedBtn.disabled) return;
 
-      // Combined behavior: if there's a question typed, treat as Ask.
-      const q = (this.promptInput?.value || '').trim();
-      // Reveal the Ask input the first time user clicks Summarize
-      if (this.promptInput && this.promptInput.hasAttribute('hidden')) {
-        this.promptInput.removeAttribute('hidden');
+      // SUMMARIZE button always summarizes, regardless of Ask input content
+      // Ask input is now always visible - just update send button visibility
+      if (this.promptInput) {
         this.updateSendVisibility();
-        this.promptInput.focus();
-      }
-      if (q) {
-        this.handlePromptSubmit();
-        return;
       }
 
       const videoId = this.transcriptService.getVideoId();
@@ -990,6 +987,8 @@
           return 'Claude';
         case 'openrouter':
           return 'OpenRouter';
+        case 'ollama':
+          return 'Ollama';
         default:
           return 'Gemini';
       }
@@ -1091,11 +1090,7 @@
     updateSendVisibility() {
       if (!this.promptInput || !this.sendBtn) return;
       const hasText = (this.promptInput.value || '').trim().length > 0;
-      if (this.promptInput.hasAttribute('hidden')) {
-        this.sendBtn.hidden = true;
-      } else {
-        this.sendBtn.hidden = !hasText;
-      }
+      this.sendBtn.hidden = !hasText;
     }
 
     async handlePromptSubmit() {

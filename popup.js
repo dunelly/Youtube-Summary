@@ -10,16 +10,19 @@ const keyInputs = {
   gemini: document.getElementById('geminiKey'),
   gpt: document.getElementById('openaiKey'),
   claude: document.getElementById('claudeKey'),
-  openrouter: document.getElementById('openrouterKey')
+  openrouter: document.getElementById('openrouterKey'),
+  ollama: document.getElementById('ollamaUrl')
 };
 const openrouterModelSelect = document.getElementById('openrouterModel');
+const ollamaModelSelect = document.getElementById('ollamaModel');
 const keySections = Array.from(document.querySelectorAll('.key-section'));
 // No Chrome language list needed.
 const defaultPlaceholders = {
   gemini: keyInputs.gemini?.placeholder || 'Paste Gemini key',
   gpt: keyInputs.gpt?.placeholder || 'Paste OpenAI key',
   claude: keyInputs.claude?.placeholder || 'Paste Claude key',
-  openrouter: keyInputs.openrouter?.placeholder || 'Paste OpenRouter key'
+  openrouter: keyInputs.openrouter?.placeholder || 'Paste OpenRouter key',
+  ollama: keyInputs.ollama?.placeholder || 'http://localhost:11434'
 };
 
 async function load() {
@@ -32,6 +35,8 @@ async function load() {
       'claudeKey',
       'openrouterKey',
       'openrouterModel',
+      'ollamaUrl',
+      'ollamaModel',
       'summaryMode',
       'customPrompt',
       'includeTimestamps'
@@ -46,6 +51,10 @@ async function load() {
     if (keyInputs.openrouter) keyInputs.openrouter.value = stored.openrouterKey || '';
     if (openrouterModelSelect) {
       openrouterModelSelect.value = stored.openrouterModel || 'google/gemma-2-9b-it:free';
+    }
+    if (keyInputs.ollama) keyInputs.ollama.value = stored.ollamaUrl || 'http://localhost:11434';
+    if (ollamaModelSelect) {
+      ollamaModelSelect.value = stored.ollamaModel || 'llama3.2';
     }
 
     // Summary mode + custom prompt
@@ -154,7 +163,7 @@ if (includeTimestampsToggle) {
 Object.entries(keyInputs).forEach(([provider, input]) => {
   input.addEventListener('change', () => {
     const value = input.value.trim();
-    const keyName = provider === 'gpt' ? 'openaiKey' : provider === 'claude' ? 'claudeKey' : provider === 'openrouter' ? 'openrouterKey' : 'geminiKey';
+    const keyName = provider === 'gpt' ? 'openaiKey' : provider === 'claude' ? 'claudeKey' : provider === 'openrouter' ? 'openrouterKey' : provider === 'ollama' ? 'ollamaUrl' : 'geminiKey';
     chrome.storage.sync
       .set({ [keyName]: value })
       .catch(error => console.error(`[YAIVS] Failed to save ${provider} key`, error));
@@ -167,6 +176,15 @@ if (openrouterModelSelect) {
     chrome.storage.sync
       .set({ openrouterModel: value })
       .catch(error => console.error('[YAIVS] Failed to save OpenRouter model', error));
+  });
+}
+
+if (ollamaModelSelect) {
+  ollamaModelSelect.addEventListener('change', () => {
+    const value = ollamaModelSelect.value;
+    chrome.storage.sync
+      .set({ ollamaModel: value })
+      .catch(error => console.error('[YAIVS] Failed to save Ollama model', error));
   });
 }
 
