@@ -79,9 +79,7 @@ async function load() {
 
     // No experimental flag anymore; v2 is default.
 
-    // Try to inject the in-page panel when popup opens on a YouTube tab.
-    // Works even if site access is still "On click" before the user accepts.
-    maybeInjectOnActiveYouTubeTab();
+    // No manual injection needed; content script loads via manifest.
   } catch (error) {
     console.error('[YAIVS] Failed to load popup settings', error);
   }
@@ -202,21 +200,7 @@ function toggleCustomPromptVisibility() {
   customPromptContainer.hidden = !isCustom;
 }
 
-async function maybeInjectOnActiveYouTubeTab() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.id || !tab.url) return;
-    const url = tab.url;
-    const isYouTube = /https?:\/\/(?:www\.|m\.)?youtube\.com\//i.test(url);
-    if (!isYouTube) return;
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content/v2/app.js']
-    });
-  } catch (error) {
-    console.debug('[YAIVS] Injection skipped/failed (likely already injected):', error?.message || String(error));
-  }
-}
+// No manual injection helper needed in v2 release.
 
 async function ensureYouTubePermission() {
   try {
