@@ -9,7 +9,7 @@ async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, duratio
   const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel', 'summaryMode', 'customPrompt', 'includeTimestamps']);
   const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
   const storedCustom = typeof customPrompt === 'string' ? customPrompt : settings.customPrompt;
-  const mode = ['simple', 'detailed', 'custom'].includes(selectedMode) ? selectedMode : 'simple';
+  const mode = ['simple', 'bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(selectedMode) ? selectedMode : 'simple';
   const custom = (storedCustom || '').toString().trim();
   const effectiveMode = mode === 'custom' && !custom ? 'simple' : mode;
   const useTimestamps = includeTimestamps !== false && settings.includeTimestamps !== false;
@@ -50,6 +50,42 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTim
     return lines.filter(Boolean).join('\n');
   }
 
+  if (mode === 'chapters') {
+    const lines = [
+      ...sharedGeneral,
+      'Summarize by chapters. For each chapter: use the chapter title as a heading with an emoji, then 2–4 bullets with timestamps for key points. If chapters are missing, approximate with sensible time ranges. Keep it concise.',
+      includeTimestamps ? timeHints : ''
+    ];
+    return lines.filter(Boolean).join('\n');
+  }
+
+  if (mode === 'proscons') {
+    const lines = [
+      ...sharedGeneral,
+      'Organize as two sections: "👍 Pros" and "👎 Cons". Under each, provide 3–6 concise bullets with timestamps where relevant. End with an "👉 Takeaway".',
+      includeTimestamps ? timeHints : ''
+    ];
+    return lines.filter(Boolean).join('\n');
+  }
+
+  if (mode === 'recipe') {
+    const lines = [
+      ...sharedGeneral,
+      'Format as a recipe: Title, Ingredients (bulleted list), then Steps (numbered with concise instructions). Include timestamps for each step if applicable. Keep it factual and concise.',
+      includeTimestamps ? timeHints : ''
+    ];
+    return lines.filter(Boolean).join('\n');
+  }
+
+  if (mode === 'outline') {
+    const lines = [
+      ...sharedGeneral,
+      'Produce a structured outline: I., II., III. with nested bullets (A., 1.) where helpful. Include timestamps for key segments. Keep items under ~18 words.',
+      includeTimestamps ? timeHints : ''
+    ];
+    return lines.filter(Boolean).join('\n');
+  }
+
   if (mode === 'custom' && customPrompt) {
     const lines = [
       `User instructions (apply first): ${customPrompt}`,
@@ -58,6 +94,23 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTim
       'If the user instructions conflict with formatting guidance, follow the user. Emoji/bullet style is optional unless requested.',
       'Keep writing tight, avoid fluff. If structure is unspecified, 5–7 short sections are acceptable.',
       includeTimestamps ? timeHints : ''
+    ];
+    return lines.filter(Boolean).join('\n');
+  }
+
+  if (mode === 'bullets') {
+    // Same as simple mode
+    const lines = [
+      ...sharedGeneral,
+      includeTimestamps ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when possible.' : 'Do not include timestamps.',
+      'Use 5–7 thematic sections relevant to the transcript. Each heading must begin with an expressive emoji, a space, and a short label.',
+      'Do not invent or include irrelevant categories. Never add empty or "N/A" sections.',
+      'Under each heading produce 2–4 factual bullets. Each bullet must start with a single tab character followed by "• " (example: "\\t• Brighter 3,000-nit display.").',
+      'Keep bullets under ~18 words.',
+      'Finish with an "👉 Takeaway" section summarizing the key conclusion.',
+      'Call out uncertainties or missing transcript portions inside the affected section/bullet.',
+      includeTimestamps ? timeHints : '',
+      'Do not append questions or calls-to-action after the "👉 Takeaway" section.'
     ];
     return lines.filter(Boolean).join('\n');
   }

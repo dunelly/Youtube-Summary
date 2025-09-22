@@ -60,7 +60,7 @@ async function load() {
     // Summary mode + custom prompt
     if (summaryModeSelect) {
       const mode = typeof stored.summaryMode === 'string' ? stored.summaryMode : 'simple';
-      summaryModeSelect.value = ['simple', 'detailed', 'custom'].includes(mode) ? mode : 'simple';
+      summaryModeSelect.value = ['simple', 'bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(mode) ? mode : 'simple';
     }
     if (customPromptTextarea) {
       customPromptTextarea.value = (stored.customPrompt || '').toString();
@@ -130,7 +130,7 @@ providerSelect.addEventListener('change', () => {
 if (summaryModeSelect) {
   summaryModeSelect.addEventListener('change', () => {
     const value = summaryModeSelect.value;
-    const mode = ['simple', 'detailed', 'custom'].includes(value) ? value : 'simple';
+    const mode = ['simple', 'bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(value) ? value : 'simple';
     chrome.storage.sync
       .set({ summaryMode: mode })
       .then(() => toggleCustomPromptVisibility())

@@ -1015,18 +1015,27 @@
       const headerRow = this.panel.querySelector('.yaivs-header-row');
       if (!headerRow) return;
       const headerRect = headerRow.getBoundingClientRect();
-      const arrowRect = this.styleBtn.getBoundingClientRect();
+      // Find the actual arrow symbol for better alignment
+      const arrowSymbol = this.styleBtn.querySelector('.yaivs-arrow');
+      const targetRect = arrowSymbol ? arrowSymbol.getBoundingClientRect() : this.styleBtn.getBoundingClientRect();
 
       // Ensure we can measure menu width
       const prevLeft = this.styleMenu.style.left;
       this.styleMenu.style.left = '0px';
       const menuRect = this.styleMenu.getBoundingClientRect();
 
-      const desiredLeft = Math.round(arrowRect.right - headerRect.left - menuRect.width);
+      // Position relative to the dropdown button both horizontally and vertically
+      const dropdownRect = this.styleBtn.getBoundingClientRect();
+      const dropdownRight = dropdownRect.right - headerRect.left;
+      const dropdownBottom = dropdownRect.bottom - headerRect.top;
+      
+      const desiredLeft = Math.round(dropdownRight - menuRect.width);
       const minLeft = 0;
       const maxLeft = Math.max(0, Math.round(headerRect.width - menuRect.width));
       const clampedLeft = Math.min(maxLeft, Math.max(minLeft, desiredLeft));
+      
       this.styleMenu.style.left = `${clampedLeft}px`;
+      this.styleMenu.style.top = `${dropdownBottom - 2}px`;
     }
 
     handleStyleMenuClick(event) {
@@ -1345,7 +1354,7 @@
         position: absolute;
         left: 0; /* positioned via JS to align under arrow */
         right: auto;
-        top: calc(100% + 8px);
+        top: 100%;
         display: flex;
         flex-direction: column;
         gap: 4px;
