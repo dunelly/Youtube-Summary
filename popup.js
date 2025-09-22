@@ -79,7 +79,8 @@ async function load() {
 
     // No experimental flag anymore; v2 is default.
 
-    // No manual injection needed; content script loads via manifest.
+    // Attempt to inject the loader for users with "on click" site access.
+    maybeInjectOnActiveYouTubeTab();
   } catch (error) {
     console.error('[YAIVS] Failed to load popup settings', error);
   }
@@ -200,7 +201,21 @@ function toggleCustomPromptVisibility() {
   customPromptContainer.hidden = !isCustom;
 }
 
-// No manual injection helper needed in v2 release.
+async function maybeInjectOnActiveYouTubeTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.id || !tab.url) return;
+    const url = tab.url;
+    const isYouTube = /https?:\/\/(?:www\.|m\.)?youtube\.com\//i.test(url);
+    if (!isYouTube) return;
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['content/loader.js']
+    });
+  } catch (error) {
+    console.debug('[YAIVS] Loader injection skipped/failed:', error?.message || String(error));
+  }
+}
 
 async function ensureYouTubePermission() {
   try {
