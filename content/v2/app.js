@@ -10,6 +10,7 @@ import {
 } from './utils.js';
 import { SettingsManager, DEFAULT_SETTINGS } from './core/settings.js';
 import { TranscriptService } from './core/transcript.js';
+import { SummaryPanel } from './ui/panel.js';
 
 (() => {
   try {
@@ -30,11 +31,9 @@ import { TranscriptService } from './core/transcript.js';
     // Initialize core services (no UI yet)
     const settings = new SettingsManager(DEFAULT_SETTINGS);
     const transcript = new TranscriptService();
-    // Wait for settings to load silently; don't trigger network in transcript.
     void settings.ready;
-
-    // Do not mount UI yet. Future slices will bring UI class over.
-    console.info('[YAIVS] Experimental v2 loaded (helpers wired, no UI yet).');
+    new SummaryPanel(settings, transcript);
+    console.info('[YAIVS] Experimental v2 loaded (UI mounted).');
   } catch (e) {
     console.warn('[YAIVS] v2 init failed:', e?.message || e);
   }
