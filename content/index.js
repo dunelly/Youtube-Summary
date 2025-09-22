@@ -652,7 +652,6 @@
 
       await this.settings.ready;
 
-
       const mountPoint = await getPanelMountPoint();
       if (!mountPoint?.parent) {
         console.warn('[YAIVS] Unable to locate a mount point for the summary panel.');
@@ -785,7 +784,6 @@
       this.updateInfoMessage();
       // no provider chip
     }
-
 
     ensureAboveDescription(container) {
       try {
