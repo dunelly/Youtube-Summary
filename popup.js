@@ -43,7 +43,7 @@ async function load() {
     ]);
 
     toggle.checked = Boolean(stored.autoSummarize);
-    providerSelect.value = stored.provider || 'gemini';
+    providerSelect.value = stored.provider || 'openrouter';
 
     keyInputs.gemini.value = stored.geminiKey || '';
     keyInputs.gpt.value = stored.openaiKey || '';

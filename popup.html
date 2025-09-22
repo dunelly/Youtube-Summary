@@ -100,10 +100,10 @@
     <label class="select-row">
       <span>Choose model</span>
       <select id="provider">
+        <option value="openrouter">OpenRouter.ai</option>
         <option value="gemini">Gemini</option>
         <option value="gpt">GPT (OpenAI)</option>
         <option value="claude">Claude (Anthropic)</option>
-        <option value="openrouter">OpenRouter.ai</option>
         <option value="ollama">Ollama (Local)</option>
       </select>
     </label>
@@ -134,6 +134,21 @@
 
     <!-- Chrome on-device summarizer removed for performance; language selector omitted. -->
 
+    <section class="key-section" data-provider="openrouter">
+      <label class="key-label" for="openrouterKey">OpenRouter API key</label>
+      <input type="password" id="openrouterKey" placeholder="Paste OpenRouter key (works with DeepSeek free)" autocomplete="off" />
+      <div class="model-row">
+        <label class="key-label" for="openrouterModel">Model</label>
+        <select id="openrouterModel">
+          <option value="google/gemma-2-9b-it:free">Gemma 2 9B (free) — fastest</option>
+          <option value="x-ai/grok-4-fast:free">Grok 4 Fast (free)</option>
+          <option value="mistralai/mistral-7b-instruct:free">Mistral 7B Instruct (free)</option>
+          <option value="deepseek/deepseek-chat-v3.1:free">DeepSeek Chat v3.1 (free)</option>
+        </select>
+      </div>
+      <p class="help">Choose a free model; Gemma 2 9B Free is fastest in our tests.</p>
+    </section>
+
     <section class="key-section" data-provider="gemini">
       <label class="key-label" for="geminiKey">Gemini API key</label>
       <input type="password" id="geminiKey" placeholder="Paste Gemini key" autocomplete="off" />
@@ -149,20 +164,6 @@
       <input type="password" id="claudeKey" placeholder="Paste Claude key" autocomplete="off" />
     </section>
 
-    <section class="key-section" data-provider="openrouter">
-      <label class="key-label" for="openrouterKey">OpenRouter API key</label>
-      <input type="password" id="openrouterKey" placeholder="Paste OpenRouter key (works with DeepSeek free)" autocomplete="off" />
-      <div class="model-row">
-        <label class="key-label" for="openrouterModel">Model</label>
-        <select id="openrouterModel">
-          <option value="google/gemma-2-9b-it:free">Gemma 2 9B (free) — fastest</option>
-          <option value="x-ai/grok-4-fast:free">Grok 4 Fast (free)</option>
-          <option value="mistralai/mistral-7b-instruct:free">Mistral 7B Instruct (free)</option>
-          <option value="deepseek/deepseek-chat-v3.1:free">DeepSeek Chat v3.1 (free)</option>
-        </select>
-      </div>
-      <p class="help">Choose a free model; Gemma 2 9B Free is fastest in our tests.</p>
-    </section>
 
     <section class="key-section" data-provider="ollama">
       <label class="key-label" for="ollamaUrl">Ollama Server URL</label>

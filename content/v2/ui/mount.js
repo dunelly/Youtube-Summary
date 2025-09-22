@@ -89,7 +89,7 @@ export function injectStyles() {
         display: flex;
         align-items: center;
         padding: 0;
-        border-radius: 18px;
+        border-radius: 20px;
         border: none;
         background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
         color: var(--yt-spec-text-primary, #0f0f0f);
@@ -98,7 +98,7 @@ export function injectStyles() {
         transition: all 0.1s ease;
         overflow: hidden;
         flex-shrink: 0;
-        height: 36px;
+        height: 44px;
       }
 
       .yaivs-unified-main {
@@ -122,8 +122,8 @@ export function injectStyles() {
         height: 100%;
       }
 
-      .yaivs-text { font-size: 14px; font-weight: 500; letter-spacing: 0.25px; }
-      .yaivs-arrow { font-size: 12px; line-height: 1; opacity: 0.8; }
+      .yaivs-text { font-size: 15px; font-weight: 500; letter-spacing: 0.25px; }
+      .yaivs-arrow { font-size: 14px; line-height: 1; opacity: 0.8; }
 
       .yaivs-unified-button:hover { background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1)); }
       .yaivs-unified-button:disabled { background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05)); color: var(--yt-spec-text-disabled, rgba(0, 0, 0, 0.38)); cursor: not-allowed; }
@@ -182,4 +182,3 @@ export function injectStyles() {
 
   document.head.appendChild(style);
 }
-

@@ -2,7 +2,7 @@
 
 export const DEFAULT_SETTINGS = {
   autoSummarize: false,
-  provider: 'gemini',
+  provider: 'openrouter',
   summaryMode: 'simple',
   customPrompt: '',
   includeTimestamps: true
@@ -84,4 +84,3 @@ export class SettingsManager {
     this.onChange = callback;
   }
 }
-

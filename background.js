@@ -3,7 +3,7 @@ const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-const DEFAULT_PROVIDER = 'gemini';
+const DEFAULT_PROVIDER = 'openrouter';
 
 // ---------------------------------------------------------------------------
 // Dynamic toolbar icon (colored Y)
