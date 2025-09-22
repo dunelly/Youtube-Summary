@@ -28,8 +28,7 @@
         "https://www.youtube.com/*",
         "https://m.youtube.com/*"
       ],
-      "js": ["content/v2/app.js"],
-      "type": "module",
+      "js": ["content/loader.js"],
       "run_at": "document_idle"
     }
   ],
