@@ -247,7 +247,7 @@ export class SummaryPanel {
     try {
       await this.settings.ready;
       const provider = this.settings.get('provider') || 'gemini';
-      const selectedMode = (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'simple');
+      const selectedMode = (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'bullets');
       const modeLabel = this.getModeLabel(selectedMode);
       const { text: transcript, durationSeconds } = await this.transcriptService.collect();
 
@@ -314,7 +314,7 @@ export class SummaryPanel {
       provider,
       transcript,
       durationSeconds,
-      summaryMode: (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'simple'),
+      summaryMode: (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'bullets'),
       customPrompt: (overrides && overrides.customPrompt) || (this.settings.get('customPrompt') || '').trim(),
       includeTimestamps: this.settings.get('includeTimestamps') !== false
     });
@@ -339,7 +339,7 @@ export class SummaryPanel {
   updateInfoMessage() {
     if (!this.statusEl || this.isSummarizing || !this.summaryEl?.hidden) return;
     const providerLabel = this.getProviderLabel(this.settings.get('provider') || 'gemini');
-    const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'simple');
+    const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'bullets');
     if (this.settings.get('autoSummarize')) {
       this.statusEl.textContent = `Preparing summary (${modeLabel}) with ${providerLabel}…`;
       this.statusEl.className = 'yaivs-status yaivs-status--loading';
@@ -500,7 +500,7 @@ export class SummaryPanel {
   getPreset(style) {
     switch (style) {
       case 'simple':
-        return { summaryMode: 'simple', customPrompt: '' };
+        return { summaryMode: 'bullets', customPrompt: '' };
       case 'detailed':
         return { summaryMode: 'detailed', customPrompt: '' };
       case 'chapters':

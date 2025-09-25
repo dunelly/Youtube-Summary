@@ -10,6 +10,10 @@
   const finishBtn = qs('#finish');
   const finishStep = qs('#finish-step');
   const manualStep = qs('#manual-step');
+  
+  // Track the onboarding tab for re-injection after OAuth
+  let onboardingTabId = null;
+  let tabMonitoringActive = false;
 
   function setStatus(msg, cls = '') {
     if (!statusEl) return;
@@ -40,9 +44,9 @@
       console.log('[YAIVS Onboarding] Starting setup...');
       
       // Set default model
-      await chrome.storage.sync.set({ provider: 'openrouter', openrouterModel: 'google/gemma-2-9b-it:free' });
+      await chrome.storage.sync.set({ provider: 'openrouter', openrouterModel: 'x-ai/grok-4-fast:free' });
 
-      const url = 'https://openrouter.ai/models/google/gemma-2-9b-it:free';
+      const url = 'https://openrouter.ai/settings/keys';
       const origin = 'https://openrouter.ai/*';
 
       console.log('[YAIVS Onboarding] Checking permissions for:', origin);
@@ -64,23 +68,30 @@
       console.log('[YAIVS Onboarding] Tab created:', tab?.id);
       
       if (tab?.id) {
+        onboardingTabId = tab.id;
+        
+        // Start monitoring this tab for OAuth return (both local and background)
+        startTabMonitoring(tab.id);
+        
+        // Also register with background script for enhanced tracking
+        try {
+          await chrome.runtime.sendMessage({
+            type: 'startOnboardingSession',
+            sessionInfo: { url, startTime: Date.now() }
+          });
+          console.log('[YAIVS Onboarding] Registered session with background script');
+        } catch (error) {
+          console.log('[YAIVS Onboarding] Failed to register with background:', error);
+        }
+        
         // Wait for tab to finish loading before injecting scripts
         await waitForTabLoading(tab.id);
         
         console.log('[YAIVS Onboarding] Injecting content scripts...');
-        try {
-          await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: [
-              'content/onboarding/openrouter_sniffer.js',
-              'content/onboarding/openrouter_guide.js',
-            ]
-          });
-          console.log('[YAIVS Onboarding] Scripts injected successfully');
-          setStatus('Scripts loaded. Please sign in to OpenRouter and create a key.');
-        } catch (injectionError) {
-          console.error('[YAIVS Onboarding] Script injection failed:', injectionError);
-          setStatus(`Script injection failed: ${injectionError.message}. Try refreshing the OpenRouter page.`, 'err');
+        const injectionSuccess = await injectOnboardingScripts(tab.id);
+        
+        if (injectionSuccess) {
+          setStatus('Scripts loaded. Follow the guide to sign in and create your API key.');
         }
       } else {
         throw new Error('Failed to create tab');
@@ -154,7 +165,108 @@
     }
   }
 
+  async function injectOnboardingScripts(tabId) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: [
+          'content/onboarding/openrouter_sniffer.js',
+          'content/onboarding/openrouter_guide.js',
+        ]
+      });
+      console.log('[YAIVS Onboarding] Scripts injected successfully for tab:', tabId);
+      return true;
+    } catch (injectionError) {
+      console.error('[YAIVS Onboarding] Script injection failed:', injectionError);
+      setStatus(`Script injection failed: ${injectionError.message}. Try refreshing the OpenRouter page.`, 'err');
+      return false;
+    }
+  }
+  
+  function startTabMonitoring(tabId) {
+    if (tabMonitoringActive) {
+      console.log('[YAIVS Onboarding] Tab monitoring already active');
+      return;
+    }
+    
+    tabMonitoringActive = true;
+    console.log('[YAIVS Onboarding] Starting tab monitoring for OAuth return detection');
+    
+    const tabUpdateListener = async (tabIdUpdate, changeInfo, tab) => {
+      // Only monitor our onboarding tab
+      if (tabIdUpdate !== tabId) return;
+      
+      // Look for navigation to settings/keys after OAuth
+      if (changeInfo.url || changeInfo.status === 'complete') {
+        const currentUrl = tab.url || changeInfo.url || '';
+        console.log('[YAIVS Onboarding] Tab update detected:', {
+          tabId: tabIdUpdate,
+          status: changeInfo.status,
+          url: currentUrl,
+          title: tab.title
+        });
+        
+        // Check if we're back on settings/keys page (post-OAuth)
+        if (currentUrl.includes('/settings/keys') && changeInfo.status === 'complete') {
+          console.log('[YAIVS Onboarding] Detected return to settings/keys page, checking if scripts need re-injection');
+          
+          // Wait a bit for page to settle after OAuth redirect
+          setTimeout(async () => {
+            try {
+              // Try to communicate with existing scripts first
+              const response = await chrome.tabs.sendMessage(tabId, { type: 'YAIVS_PING' });
+              if (response?.alive) {
+                console.log('[YAIVS Onboarding] Scripts are still active, no re-injection needed');
+                return;
+              }
+            } catch (error) {
+              console.log('[YAIVS Onboarding] Scripts not responding, re-injecting:', error.message);
+            }
+            
+            // Re-inject scripts
+            console.log('[YAIVS Onboarding] Re-injecting scripts after OAuth return');
+            const success = await injectOnboardingScripts(tabId);
+            if (success) {
+              setStatus('Reconnected after sign-in. Continue following the guide.');
+            }
+          }, 1500); // Give OAuth redirect time to settle
+        }
+      }
+    };
+    
+    // Add the listener
+    chrome.tabs.onUpdated.addListener(tabUpdateListener);
+    
+    // Cleanup when tab is closed or onboarding completes
+    const tabRemovedListener = (removedTabId) => {
+      if (removedTabId === tabId) {
+        console.log('[YAIVS Onboarding] Onboarding tab closed, cleaning up monitors');
+        chrome.tabs.onUpdated.removeListener(tabUpdateListener);
+        chrome.tabs.onRemoved.removeListener(tabRemovedListener);
+        tabMonitoringActive = false;
+      }
+    };
+    
+    chrome.tabs.onRemoved.addListener(tabRemovedListener);
+    
+    // Auto-cleanup after 10 minutes to prevent memory leaks
+    setTimeout(() => {
+      if (tabMonitoringActive) {
+        console.log('[YAIVS Onboarding] Auto-cleanup: Removing tab monitors after timeout');
+        chrome.tabs.onUpdated.removeListener(tabUpdateListener);
+        chrome.tabs.onRemoved.removeListener(tabRemovedListener);
+        tabMonitoringActive = false;
+      }
+    }, 600000); // 10 minutes
+  }
+  
   async function finish() {
+    // Cleanup monitoring when finishing
+    if (tabMonitoringActive && onboardingTabId) {
+      console.log('[YAIVS Onboarding] Finishing onboarding, cleaning up tab monitoring');
+      tabMonitoringActive = false;
+    }
+    
     try {
       chrome.tabs.create({ url: 'https://www.youtube.com' }).catch(() => {});
       window.close();
@@ -164,12 +276,27 @@
   }
 
   // React to key saved by sniffer while this page is open
-  chrome.storage.onChanged.addListener((changes, area) => {
+  chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area !== 'sync') return;
     if (changes.openrouterKey?.newValue) {
+      console.log('[YAIVS Onboarding] Key saved detected, showing completion step');
       qs('.step').hidden = true;
       manualStep.hidden = true;
       finishStep.hidden = false;
+      
+      // Cleanup tab monitoring since onboarding is complete
+      if (tabMonitoringActive && onboardingTabId) {
+        console.log('[YAIVS Onboarding] Key saved, cleaning up tab monitoring');
+        tabMonitoringActive = false;
+        
+        // Also cleanup background tracking
+        try {
+          await chrome.runtime.sendMessage({ type: 'stopOnboardingSession' });
+          console.log('[YAIVS Onboarding] Cleaned up background session tracking');
+        } catch (error) {
+          console.log('[YAIVS Onboarding] Failed to cleanup background session:', error);
+        }
+      }
     }
   });
 

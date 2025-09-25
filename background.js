@@ -134,9 +134,9 @@ async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, duratio
   const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel', 'summaryMode', 'customPrompt', 'includeTimestamps']);
   const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
   const storedCustom = typeof customPrompt === 'string' ? customPrompt : settings.customPrompt;
-  const mode = ['simple', 'bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(selectedMode) ? selectedMode : 'simple';
+  const mode = ['bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(selectedMode) ? selectedMode : 'bullets';
   const custom = (storedCustom || '').toString().trim();
-  const effectiveMode = mode === 'custom' && !custom ? 'simple' : mode;
+  const effectiveMode = mode === 'custom' && !custom ? 'bullets' : mode;
   const useTimestamps = includeTimestamps !== false && settings.includeTimestamps !== false;
   const prompt = buildPromptInstructions(effectiveMode, durationSeconds, custom, useTimestamps);
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
@@ -223,24 +223,7 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTim
     return lines.filter(Boolean).join('\n');
   }
 
-  if (mode === 'bullets') {
-    // Same as simple mode
-    const lines = [
-      ...sharedGeneral,
-      includeTimestamps ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when possible.' : 'Do not include timestamps.',
-      'Use 5–7 thematic sections relevant to the transcript. Each heading must begin with an expressive emoji, a space, and a short label.',
-      'Do not invent or include irrelevant categories. Never add empty or "N/A" sections.',
-      'Under each heading produce 2–4 factual bullets. Each bullet must start with a single tab character followed by "• " (example: "\t• Brighter 3,000-nit display.").',
-      'Keep bullets under ~18 words.',
-      'Finish with an "👉 Takeaway" section summarizing the key conclusion.',
-      'Call out uncertainties or missing transcript portions inside the affected section/bullet.',
-      includeTimestamps ? timeHints : '',
-      'Do not append questions or calls-to-action after the "👉 Takeaway" section.'
-    ];
-    return lines.filter(Boolean).join('\n');
-  }
-
-  // simple (default)
+  // bullets (default)
   const lines = [
     ...sharedGeneral,
     includeTimestamps ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when possible.' : 'Do not include timestamps.',
@@ -448,7 +431,7 @@ async function summarizeWithOpenRouter(prompt, key, model) {
   if (!key) {
     throw new Error('OpenRouter API key is missing.');
   }
-  const chosenModel = (model && String(model)) || 'google/gemma-2-9b-it:free';
+  const chosenModel = (model && String(model)) || 'x-ai/grok-4-fast:free';
   const body = {
     model: chosenModel,
     messages: [
@@ -546,7 +529,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
       try {
         const { openrouterKey, openrouterModel } = await chrome.storage.sync.get(['openrouterKey', 'openrouterModel']);
-        const model = openrouterModel || 'google/gemma-2-9b-it:free';
+        const model = openrouterModel || 'x-ai/grok-4-fast:free';
         const summary = await summarizeWithOpenRouter('Reply with OK', openrouterKey, model);
         sendResponse && sendResponse({ status: 'ok', result: (summary || '').slice(0, 100) });
       } catch (e) {
@@ -590,5 +573,107 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.error('Content script error:', request.message);
   }
 
+  // Handle onboarding session tracking
+  if (request?.type === 'startOnboardingSession') {
+    const tabId = sender?.tab?.id;
+    if (tabId) {
+      trackOnboardingSession(tabId, request.sessionInfo || {});
+      sendResponse({ status: 'ok' });
+    }
+    return true;
+  }
+
+  if (request?.type === 'stopOnboardingSession') {
+    const tabId = sender?.tab?.id;
+    if (tabId) {
+      stopTrackingSession(tabId);
+      sendResponse({ status: 'ok' });
+    }
+    return true;
+  }
+
   return undefined;
+});
+
+// --------------------------------------------------------------------------- 
+// Onboarding session tracking for OAuth re-injection
+// ---------------------------------------------------------------------------
+const onboardingSessions = new Map(); // tabId -> session info
+
+function trackOnboardingSession(tabId, sessionInfo) {
+  console.log('[YAIVS Background] Tracking onboarding session for tab:', tabId);
+  onboardingSessions.set(tabId, {
+    ...sessionInfo,
+    startTime: Date.now(),
+    lastInjection: Date.now()
+  });
+  
+  // Auto-cleanup after 15 minutes
+  setTimeout(() => {
+    if (onboardingSessions.has(tabId)) {
+      console.log('[YAIVS Background] Auto-cleaning up onboarding session for tab:', tabId);
+      onboardingSessions.delete(tabId);
+    }
+  }, 900000); // 15 minutes
+}
+
+function stopTrackingSession(tabId) {
+  console.log('[YAIVS Background] Stopping tracking for tab:', tabId);
+  onboardingSessions.delete(tabId);
+}
+
+// Monitor tabs for OAuth returns
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  const session = onboardingSessions.get(tabId);
+  if (!session) return; // Not an onboarding tab
+  
+  // Check if we returned to settings/keys after OAuth
+  if (changeInfo.status === 'complete' && tab.url?.includes('/settings/keys')) {
+    const timeSinceLastInjection = Date.now() - session.lastInjection;
+    
+    console.log('[YAIVS Background] OAuth return detected for tab:', tabId, {
+      url: tab.url,
+      timeSinceLastInjection
+    });
+    
+    // Only re-inject if enough time has passed (avoid spam)
+    if (timeSinceLastInjection > 3000) { // 3 seconds
+      try {
+        // Test if scripts are still alive
+        const response = await chrome.tabs.sendMessage(tabId, { type: 'YAIVS_PING' });
+        if (response?.alive) {
+          console.log('[YAIVS Background] Scripts still alive, no re-injection needed');
+          return;
+        }
+      } catch (error) {
+        console.log('[YAIVS Background] Scripts not responding, re-injecting');
+      }
+      
+      // Re-inject scripts after delay
+      setTimeout(async () => {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            files: [
+              'content/onboarding/openrouter_sniffer.js',
+              'content/onboarding/openrouter_guide.js',
+            ]
+          });
+          
+          session.lastInjection = Date.now();
+          console.log('[YAIVS Background] Scripts re-injected successfully after OAuth');
+        } catch (error) {
+          console.error('[YAIVS Background] Failed to re-inject scripts:', error);
+        }
+      }, 1000);
+    }
+  }
+});
+
+// Clean up when tabs are closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (onboardingSessions.has(tabId)) {
+    console.log('[YAIVS Background] Tab closed, cleaning up onboarding session:', tabId);
+    stopTrackingSession(tabId);
+  }
 });

@@ -13,7 +13,7 @@ cod(() => {
   const DEFAULT_SETTINGS = {
     autoSummarize: false,
     provider: 'gemini',
-    summaryMode: 'simple',
+    summaryMode: 'bullets',
     customPrompt: '',
     includeTimestamps: true
   };
@@ -270,13 +270,13 @@ cod(() => {
           this.values.autoSummarize = Boolean(stored.autoSummarize);
         }
         this.values.provider = stored.provider || this.defaults.provider || 'gemini';
-        this.values.summaryMode = stored.summaryMode || this.defaults.summaryMode || 'simple';
+        this.values.summaryMode = stored.summaryMode || this.defaults.summaryMode || 'bullets';
         this.values.customPrompt = stored.customPrompt || this.defaults.customPrompt || '';
         this.values.includeTimestamps = stored.includeTimestamps !== false;
       } catch (error) {
         console.warn('[YAIVS] Failed to load settings', error);
         this.values.provider = this.defaults.provider || 'gemini';
-        this.values.summaryMode = this.defaults.summaryMode || 'simple';
+        this.values.summaryMode = this.defaults.summaryMode || 'bullets';
         this.values.customPrompt = this.defaults.customPrompt || '';
         this.values.includeTimestamps = true;
       }
@@ -300,7 +300,7 @@ cod(() => {
       // chromeOutputLanguage removed
 
       if (Object.prototype.hasOwnProperty.call(changes, 'summaryMode')) {
-        this.values.summaryMode = changes.summaryMode.newValue || 'simple';
+        this.values.summaryMode = changes.summaryMode.newValue || 'bullets';
         patched = true;
       }
 
@@ -862,7 +862,7 @@ cod(() => {
       try {
         await this.settings.ready;
         const provider = this.settings.get('provider') || 'gemini';
-        const selectedMode = (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'simple');
+        const selectedMode = (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'bullets');
         const modeLabel = this.getModeLabel(selectedMode);
         const { text: transcript, durationSeconds } = await this.transcriptService.collect();
         let activeProvider = provider;
@@ -937,7 +937,7 @@ cod(() => {
         provider,
         transcript,
         durationSeconds,
-        summaryMode: (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'simple'),
+        summaryMode: (overrides && overrides.summaryMode) || (this.settings.get('summaryMode') || 'bullets'),
         customPrompt: (overrides && overrides.customPrompt) || (this.settings.get('customPrompt') || '').trim(),
         includeTimestamps: this.settings.get('includeTimestamps') !== false
       });
@@ -966,7 +966,7 @@ cod(() => {
       }
 
       const providerLabel = this.getProviderLabel(this.settings.get('provider') || 'gemini');
-      const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'simple');
+      const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'bullets');
       if (this.settings.get('autoSummarize')) {
         this.statusEl.textContent = `Preparing summary (${modeLabel}) with ${providerLabel}…`;
         this.statusEl.className = 'yaivs-status yaivs-status--loading';
@@ -1054,7 +1054,7 @@ cod(() => {
     getPreset(style) {
       switch (style) {
         case 'simple':
-          return { summaryMode: 'simple', customPrompt: '' };
+          return { summaryMode: 'bullets', customPrompt: '' };
         case 'detailed':
           return { summaryMode: 'detailed', customPrompt: '' };
         case 'chapters':

@@ -3,7 +3,7 @@
 export const DEFAULT_SETTINGS = {
   autoSummarize: false,
   provider: 'openrouter',
-  summaryMode: 'simple',
+  summaryMode: 'bullets',
   customPrompt: '',
   includeTimestamps: true
 };
@@ -29,13 +29,13 @@ export class SettingsManager {
         this.values.autoSummarize = Boolean(stored.autoSummarize);
       }
       this.values.provider = stored.provider || this.defaults.provider || 'gemini';
-      this.values.summaryMode = stored.summaryMode || this.defaults.summaryMode || 'simple';
+      this.values.summaryMode = stored.summaryMode || this.defaults.summaryMode || 'bullets';
       this.values.customPrompt = stored.customPrompt || this.defaults.customPrompt || '';
       this.values.includeTimestamps = stored.includeTimestamps !== false;
     } catch (error) {
       console.warn('[YAIVS] Failed to load settings', error);
       this.values.provider = this.defaults.provider || 'gemini';
-      this.values.summaryMode = this.defaults.summaryMode || 'simple';
+      this.values.summaryMode = this.defaults.summaryMode || 'bullets';
       this.values.customPrompt = this.defaults.customPrompt || '';
       this.values.includeTimestamps = true;
     }
@@ -57,7 +57,7 @@ export class SettingsManager {
     }
 
     if (Object.prototype.hasOwnProperty.call(changes, 'summaryMode')) {
-      this.values.summaryMode = changes.summaryMode.newValue || 'simple';
+      this.values.summaryMode = changes.summaryMode.newValue || 'bullets';
       patched = true;
     }
 

@@ -50,7 +50,7 @@ async function load() {
     keyInputs.claude.value = stored.claudeKey || '';
     if (keyInputs.openrouter) keyInputs.openrouter.value = stored.openrouterKey || '';
     if (openrouterModelSelect) {
-      openrouterModelSelect.value = stored.openrouterModel || 'google/gemma-2-9b-it:free';
+      openrouterModelSelect.value = stored.openrouterModel || 'x-ai/grok-4-fast:free';
     }
     if (keyInputs.ollama) keyInputs.ollama.value = stored.ollamaUrl || 'http://localhost:11434';
     if (ollamaModelSelect) {
@@ -59,8 +59,8 @@ async function load() {
 
     // Summary mode + custom prompt
     if (summaryModeSelect) {
-      const mode = typeof stored.summaryMode === 'string' ? stored.summaryMode : 'simple';
-      summaryModeSelect.value = ['simple', 'bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(mode) ? mode : 'simple';
+      const mode = typeof stored.summaryMode === 'string' ? stored.summaryMode : 'bullets';
+      summaryModeSelect.value = ['bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(mode) ? mode : 'bullets';
     }
     if (customPromptTextarea) {
       customPromptTextarea.value = (stored.customPrompt || '').toString();
@@ -131,7 +131,7 @@ providerSelect.addEventListener('change', () => {
 if (summaryModeSelect) {
   summaryModeSelect.addEventListener('change', () => {
     const value = summaryModeSelect.value;
-    const mode = ['simple', 'bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(value) ? value : 'simple';
+    const mode = ['bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(value) ? value : 'bullets';
     chrome.storage.sync
       .set({ summaryMode: mode })
       .then(() => toggleCustomPromptVisibility())

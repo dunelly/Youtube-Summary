@@ -54,6 +54,29 @@
     return els.find((el) => (el.textContent || '').toLowerCase().includes(t));
   }
 
+  function detectLoginState() {
+    // Check for login required indicators
+    const loginRequired = elContainsText('h1, h2, p, div', 'sign in') ||
+                         elContainsText('h1, h2, p, div', 'log in') ||
+                         elContainsText('h1, h2, p, div', 'please log in') ||
+                         elContainsText('button, a', 'continue with google') ||
+                         elContainsText('button, a', 'sign in with google') ||
+                         document.querySelector('form[action*="login"], form[action*="signin"], form[action*="auth"]');
+    
+    // Check for authenticated indicators (settings page specific)
+    const authenticated = document.querySelector('[data-testid*="key"], [data-cy*="key"], .api-key, [class*="api-key"]') ||
+                         elContainsText('button, a', 'create key') ||
+                         elContainsText('button, a', 'new key') ||
+                         elContainsText('h1, h2', 'api keys') ||
+                         document.querySelector('table, .table, [role="table"]'); // Key listing tables
+    
+    console.log('[YAIVS Guide] Login state detection:', { loginRequired: !!loginRequired, authenticated: !!authenticated });
+    
+    if (loginRequired && !authenticated) return 'login_required';
+    if (authenticated) return 'authenticated';
+    return 'unknown';
+  }
+
   async function hasSavedKey() {
     try {
       console.log('[YAIVS Guide] Checking for saved key');
@@ -90,19 +113,28 @@
       // Check current URL to provide context-aware guidance
       const currentUrl = window.location.href;
       const isModelPage = currentUrl.includes('/models/');
-      const isKeysPage = currentUrl.includes('/keys');
+      const isKeysPage = currentUrl.includes('/keys') || currentUrl.includes('/settings/keys');
+      const isSettingsKeysPage = currentUrl.includes('/settings/keys');
       const isHomePage = currentUrl === 'https://openrouter.ai/' || currentUrl === 'https://openrouter.ai';
       
-      console.log('[YAIVS Guide] Page context:', { isModelPage, isKeysPage, isHomePage });
+      // Detect current login/authentication state
+      const loginState = detectLoginState();
+      
+      console.log('[YAIVS Guide] Page context:', { isModelPage, isKeysPage, isSettingsKeysPage, isHomePage, loginState });
 
-      // If we see a Google sign-in prompt/button, guide the user to sign in.
-      const googleBtn = elContainsText('button, a', 'continue with google') || 
-                       elContainsText('button, a', 'sign in with google') ||
-                       elContainsText('button, a', 'sign up') ||
-                       elContainsText('button, a', 'get started');
-      if (googleBtn) {
-        console.log('[YAIVS Guide] Detected Google sign-in button');
-        set('<h3>Step 1: Sign in</h3><p>Click <b>Continue with Google</b> or <b>Sign up</b> to create a free OpenRouter account.</p>');
+      // Handle login state first - this takes priority over everything else
+      if (loginState === 'login_required') {
+        console.log('[YAIVS Guide] Login required, showing sign-in guidance');
+        const googleBtn = elContainsText('button, a', 'continue with google') || 
+                         elContainsText('button, a', 'sign in with google') ||
+                         elContainsText('button, a', 'sign up') ||
+                         elContainsText('button, a', 'get started');
+        
+        if (googleBtn) {
+          set('<h3>Step 1: Sign in Required</h3><p>You need to sign in to access API keys. Click <b>Continue with Google</b> or <b>Sign up</b> to continue.</p>');
+        } else {
+          set('<h3>Sign in Required</h3><p>Please sign in to OpenRouter to access the API keys section. Look for a sign-in or login button.</p>');
+        }
         return;
       }
 
@@ -131,15 +163,58 @@
         return;
       }
 
-      // If we are on a Keys page (look for Create Key)
+      // If we are on the settings/keys page and authenticated
+      if (isSettingsKeysPage && loginState === 'authenticated') {
+        const createBtn = elContainsText('button, a', 'create key') || 
+                          elContainsText('button, a', 'new key') ||
+                          elContainsText('button, a', 'add key') ||
+                          elContainsText('button', 'create');
+        
+        if (createBtn) {
+          console.log('[YAIVS Guide] Detected Create Key button on settings page');
+          set('<h3>Create Your API Key</h3><p>Click <b>Create Key</b> to generate your free API key. You can name it "YouTube AI Summary" or anything you prefer.</p>');
+          clickCreateKeyIfVisible();
+          
+          // Signal sniffer that we're on key creation page
+          try {
+            window.postMessage({ 
+              type: 'YAIVS_API_PAGE_DETECTED', 
+              source: 'guide',
+              context: 'settings_keys_page_authenticated'
+            }, '*');
+            console.log('[YAIVS Guide] Signaled sniffer about authenticated settings page');
+          } catch (error) {
+            console.error('[YAIVS Guide] Failed to signal sniffer:', error);
+          }
+          return;
+        } else {
+          console.log('[YAIVS Guide] On settings/keys page but no create button visible');
+          set('<h3>Create Your API Key</h3><p>Look for a <b>Create Key</b> or <b>New Key</b> button on this page. If you don\'t see one, try refreshing the page or check if you have the right permissions.</p>');
+          return;
+        }
+      }
+      
+      // If we are on any keys page (look for Create Key)
       const createBtn = elContainsText('button, a', 'create key') || 
                         elContainsText('button, a', 'new key') ||
                         elContainsText('button, a', 'add key') ||
                         elContainsText('button', 'create');
-      if (createBtn) {
+      if (createBtn && loginState === 'authenticated') {
         console.log('[YAIVS Guide] Detected Create Key button');
-        set('<h3>Step 3: Create a key</h3><p>Click <b>Create Key</b>. You can name it anything you like (e.g., "YouTube AI Summary").</p>');
+        set('<h3>Create Your API Key</h3><p>Click <b>Create Key</b>. You can name it anything you like (e.g., "YouTube AI Summary").</p>');
         clickCreateKeyIfVisible();
+        
+        // Signal sniffer that we're on key creation page
+        try {
+          window.postMessage({ 
+            type: 'YAIVS_API_PAGE_DETECTED', 
+            source: 'guide',
+            context: 'create_key_button_found'
+          }, '*');
+          console.log('[YAIVS Guide] Signaled sniffer about API page');
+        } catch (error) {
+          console.error('[YAIVS Guide] Failed to signal sniffer:', error);
+        }
         return;
       }
 
@@ -150,9 +225,14 @@
         return;
       }
 
-      // Default hint with more specific guidance
-      console.log('[YAIVS Guide] No specific elements detected, showing default message');
-      set('<h3>Getting started</h3><p>Please sign in to OpenRouter, then navigate to the API Keys section. If you\'re having trouble, try the <b>Manual Setup</b> option.</p>');
+      // Default guidance based on login state
+      console.log('[YAIVS Guide] No specific elements detected, showing default message for state:', loginState);
+      
+      if (loginState === 'authenticated') {
+        set('<h3>Navigate to API Keys</h3><p>You\'re signed in! Now navigate to the API Keys section to create your key. If you\'re having trouble, try the <b>Manual Setup</b> option.</p>');
+      } else {
+        set('<h3>Getting Started</h3><p>Please sign in to OpenRouter first, then this guide will help you create your API key. If you\'re having trouble, try the <b>Manual Setup</b> option.</p>');
+      }
     } catch (error) {
       console.error('[YAIVS Guide] Error in update function:', error);
       set('<h3>Guide Error</h3><p>Something went wrong. Please refresh the page or try manual setup.</p>');
@@ -180,5 +260,14 @@
   
   console.log('[YAIVS Guide] Running initial update');
   update();
+  
+  // Add message listener for ping/alive checks from onboarding
+  chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+    if (request.type === 'YAIVS_PING') {
+      console.log('[YAIVS Guide] Received ping, responding with alive status');
+      sendResponse({ alive: true, url: window.location.href });
+      return true; // Keep message channel open for async response
+    }
+  });
 })();
 
