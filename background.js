@@ -5,9 +5,9 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const DEFAULT_PROVIDER = 'openrouter';
 
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- 
 // Dynamic toolbar icon (colored Y)
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- 
 async function setColoredYIcon() {
   try {
     const sizes = [16, 32, 48, 128];
@@ -57,7 +57,7 @@ async function generateIconImageData(size, bgColor, fgColor, letter) {
         star.rot
       );
     }
-  } catch {}
+  } catch {} // Ignore errors during star drawing
 
   // Letter Y
   ctx.fillStyle = fgColor;
@@ -112,8 +112,18 @@ function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius, color, rotation
   ctx.shadowBlur = 0;
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   setColoredYIcon();
+  try {
+    if (details?.reason === 'install') {
+      const url = chrome.runtime.getURL('onboarding/index.html');
+      chrome.tabs.create({ url }).catch((error) => {
+        console.error('Failed to open onboarding page:', error);
+      });
+    }
+  } catch (error) {
+    console.error('Error in onInstalled listener:', error);
+  }
 });
 
 chrome.runtime.onStartup?.addListener?.(() => {
@@ -220,7 +230,7 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTim
       includeTimestamps ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when possible.' : 'Do not include timestamps.',
       'Use 5–7 thematic sections relevant to the transcript. Each heading must begin with an expressive emoji, a space, and a short label.',
       'Do not invent or include irrelevant categories. Never add empty or "N/A" sections.',
-      'Under each heading produce 2–4 factual bullets. Each bullet must start with a single tab character followed by "• " (example: "\\t• Brighter 3,000-nit display.").',
+      'Under each heading produce 2–4 factual bullets. Each bullet must start with a single tab character followed by "• " (example: "\t• Brighter 3,000-nit display.").',
       'Keep bullets under ~18 words.',
       'Finish with an "👉 Takeaway" section summarizing the key conclusion.',
       'Call out uncertainties or missing transcript portions inside the affected section/bullet.',
@@ -292,7 +302,7 @@ function buildQuestionPrompt(question, durationSeconds, includeTimestamps = true
   const lines = [
     'You are answering a user question using ONLY the YouTube video transcript provided below.',
     `Question: ${q}`,
-    'Give a clear, concise answer grounded in the transcript. If not answerable, say "Not found in transcript."',
+    'Give a clear, concise answer grounded in the transcript. If not answerable, say "Not found in transcript.".',
     timeHint
   ];
   return lines.filter(Boolean).join('\n');
@@ -511,15 +521,24 @@ async function summarizeWithOllama(prompt, url, model) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request?.type === 'saveOpenRouterKey') {
+    console.log('[YAIVS Background] Received saveOpenRouterKey request:', { keyLength: request.key?.length });
     const key = (request.key || '').trim();
     if (!key || !/^sk-or-/i.test(key)) {
-      sendResponse && sendResponse({ status: 'error', message: 'Invalid OpenRouter key.' });
+      console.log('[YAIVS Background] Invalid OpenRouter key format:', { key: key.slice(0, 10) + '...' });
+      sendResponse && sendResponse({ status: 'error', message: 'Invalid OpenRouter key format. Keys should start with "sk-or-".' });
       return true;
     }
+    console.log('[YAIVS Background] Saving valid OpenRouter key');
     chrome.storage.sync
       .set({ openrouterKey: key })
-      .then(() => sendResponse && sendResponse({ status: 'ok' }))
-      .catch(error => sendResponse && sendResponse({ status: 'error', message: error.message }));
+      .then(() => {
+        console.log('[YAIVS Background] OpenRouter key saved successfully');
+        sendResponse && sendResponse({ status: 'ok' });
+      })
+      .catch(error => {
+        console.error('[YAIVS Background] Failed to save OpenRouter key:', error);
+        sendResponse && sendResponse({ status: 'error', message: error.message });
+      });
     return true;
   }
 

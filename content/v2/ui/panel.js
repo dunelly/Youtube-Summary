@@ -579,8 +579,18 @@ export class SummaryPanel {
 
   getModeLabel(mode) {
     switch (mode) {
+      case 'bullets':
+        return 'Bullets';
       case 'detailed':
         return 'Detailed';
+      case 'chapters':
+        return 'Chapters';
+      case 'proscons':
+        return 'Pros & Cons';
+      case 'recipe':
+        return 'Recipe';
+      case 'outline':
+        return 'Outline';
       case 'custom':
         return 'Custom';
       default:

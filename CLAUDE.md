@@ -1,4 +1,4 @@
-# YouTube AI Video Summarizer Chrome Extension
+the # YouTube AI Video Summarizer Chrome Extension
 
 ## Project Overview
 A Chrome extension that automatically summarizes YouTube videos by extracting their transcriptions and processing them through various AI providers (Claude, GPT, etc.).

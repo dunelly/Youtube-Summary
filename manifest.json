@@ -43,6 +43,14 @@
         "https://www.youtube.com/*",
         "https://m.youtube.com/*"
       ]
+    },
+    {
+      "resources": [
+        "content/onboarding/*"
+      ],
+      "matches": [
+        "https://openrouter.ai/*"
+      ]
     }
   ]
 }

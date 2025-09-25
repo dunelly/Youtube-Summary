@@ -2,6 +2,8 @@
   const KEY_REGEX = /(sk-or-[a-z0-9-]{8,})/i;
   let sent = false;
 
+  console.log('[YAIVS Sniffer] OpenRouter key sniffer loaded');
+
   function scanOnce() {
     if (sent) return;
     try {
@@ -12,20 +14,26 @@
       let candidate = '';
       if (input && typeof input.value === 'string' && KEY_REGEX.test(input.value)) {
         candidate = input.value.match(KEY_REGEX)?.[1] || '';
+        console.log('[YAIVS Sniffer] Found key in input field');
       }
       if (!candidate && KEY_REGEX.test(rootText)) {
         candidate = rootText.match(KEY_REGEX)?.[1] || '';
+        console.log('[YAIVS Sniffer] Found key in page text');
       }
       if (!candidate && KEY_REGEX.test(html)) {
         candidate = html.match(KEY_REGEX)?.[1] || '';
+        console.log('[YAIVS Sniffer] Found key in page HTML');
       }
       if (candidate) {
+        console.log('[YAIVS Sniffer] Detected OpenRouter key, saving...');
         sent = true;
         chrome.runtime.sendMessage({ type: 'saveOpenRouterKey', key: candidate }, (res) => {
-          // no-op
+          console.log('[YAIVS Sniffer] Save response:', res);
         });
       }
-    } catch {}
+    } catch (error) {
+      console.error('[YAIVS Sniffer] Error during scan:', error);
+    }
   }
 
   // Observe DOM for changes, scan a few times

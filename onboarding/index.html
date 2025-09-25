@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YouTube AI Summary – Get Started</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      .wrap { min-height: 100vh; display: grid; place-items: center; background: radial-gradient(1200px 1200px at 80% -10%, rgba(62,166,255,.10), transparent), linear-gradient(180deg,#0b0b0b, #141414); color: #eaeaea; }
+      .card { max-width: 820px; width: 92vw; background: rgba(20,20,20,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 28px; box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
+      h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: .2px; }
+      p.lead { margin: 0 0 16px; color: #cfcfcf; }
+      .steps { display: grid; gap: 12px; margin: 18px 0 22px; }
+      .step { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; }
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      label { font-size: 14px; color: #c9d1d9; }
+      select, input[type=text] { background: #111; color: #eee; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; font: inherit; }
+      .buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+      button { border: none; border-radius: 999px; padding: 10px 14px; font: 600 14px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; cursor: pointer; color: #111; background: #3ea6ff; }
+      button.secondary { background: #fff; color: #111; }
+      button.ghost { background: transparent; color: #eaeaea; border: 1px solid rgba(255,255,255,0.18); }
+      #status { margin-top: 10px; font-size: 13px; color: #9cdcfe; min-height: 18px; }
+      .ok { color: #8ef58e; }
+      .err { color: #ff7b72; }
+      .fineprint { margin-top: 14px; font-size: 12px; color: #a8a8a8; }
+      a { color: #3ea6ff; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <h1>Welcome to YouTube AI Summary</h1>
+        <p class="lead">One quick setup to enable free AI summaries on YouTube.</p>
+
+        <div class="steps">
+          <div class="step">
+            <h2>Get Your Free API Key</h2>
+            <p>To get started, we need to connect to a free AI service. This requires an "API key."</p>
+            <p><strong>What's an API key?</strong> Think of it like a special password that lets this extension securely access the AI. It's a standard and safe way for apps to connect to services.</p>
+            <p>We'll guide you through getting a free one in just a few clicks.</p>
+            <div class="row buttons" style="margin-top: 8px;">
+              <button id="start-setup">Start Guided Setup</button>
+              <button id="manual-setup" class="ghost">Manual Setup</button>
+            </div>
+            <div id="status"></div>
+          </div>
+          <div class="step" id="manual-step" hidden>
+            <h2>Manual API Key Setup</h2>
+            <p>If the guided setup didn't work, you can manually get your API key:</p>
+            <ol style="margin: 8px 0; padding-left: 20px; color: #d0d0d0;">
+              <li>Go to <a href="https://openrouter.ai/keys" target="_blank">OpenRouter.ai/keys</a></li>
+              <li>Sign up or sign in with Google</li>
+              <li>Click "Create Key" and give it any name you want</li>
+              <li>Copy the key that starts with "sk-or-" and paste it below:</li>
+            </ol>
+            <div class="row" style="margin: 10px 0;">
+              <input type="text" id="manual-key" placeholder="Paste your sk-or-... key here" style="flex: 1;">
+            </div>
+            <div class="row buttons">
+              <button id="save-manual-key">Save Key</button>
+              <button id="back-to-guided" class="ghost">Back to Guided Setup</button>
+            </div>
+            <div id="manual-status"></div>
+          </div>
+          <div class="step" id="finish-step" hidden>
+            <h2>All Set!</h2>
+            <p>Your API key has been saved. You can now close this tab and start using the extension on YouTube.</p>
+            <div class="row buttons" style="margin-top: 8px;">
+              <button id="finish">Done – take me to YouTube</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="index.js"></script>
+  </body>
+</html>
