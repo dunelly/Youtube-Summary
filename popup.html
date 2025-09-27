@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>AI Summary Settings</title>
+    <title>YouTube Recap Settings</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -86,19 +86,72 @@
       .hint {
         margin-top: 16px;
       }
+      .upgrade-btn {
+        display: block;
+        padding: 8px 12px;
+        background: #3ea6ff;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        text-align: center;
+        font-weight: 600;
+        margin: 8px 0;
+      }
+      .upgrade-btn:hover {
+        background: #2d95ff;
+      }
+      .upgrade-note {
+        font-size: 11px;
+        color: rgba(128, 128, 128, 0.9);
+        margin: 4px 0 0;
+      }
+      #validateCode {
+        padding: 4px 8px;
+        margin-left: 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(128, 128, 128, 0.4);
+        background: #3ea6ff;
+        color: white;
+        font: inherit;
+        cursor: pointer;
+      }
+      #validateCode:hover {
+        background: #2d95ff;
+      }
+      #premiumStatus {
+        margin: 4px 0 0;
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
-    <h1>AI Summary</h1>
+    <h1>YouTube Recap</h1>
     <label>
       <input type="checkbox" id="autoSummarize" />
-      Auto summarize videos
+      Auto recap & Q&A
     </label>
     <p id="status" aria-live="polite"></p>
 
-    <h2>Provider</h2>
+    <div id="usageSection">
+      <h2>Usage</h2>
+      <p id="usageDisplay">Loading usage...</p>
+      <div id="premiumSection" hidden>
+        <label class="key-label" for="premiumCode">Premium Code</label>
+        <input type="password" id="premiumCode" placeholder="Enter your premium code" autocomplete="off" />
+        <button type="button" id="validateCode">Validate Code</button>
+        <p id="premiumStatus"></p>
+      </div>
+      <div id="upgradeSection" hidden>
+        <a href="https://www.paypal.com/ncp/payment/YQF6YXJSRQNTY" target="_blank" class="upgrade-btn">
+          🚀 Upgrade to Premium - $7.99
+        </a>
+        <p class="upgrade-note">Get unlimited summaries! You'll receive a premium code after payment.</p>
+      </div>
+    </div>
+
+    <h2>AI Provider</h2>
     <label class="select-row">
-      <span>Choose model</span>
+      <span>Choose AI model</span>
       <select id="provider">
         <option value="openrouter">OpenRouter.ai</option>
         <option value="gemini">Gemini</option>
@@ -109,7 +162,7 @@
     </label>
 
     <label class="select-row">
-      <span>Summary style</span>
+      <span>Response style</span>
       <select id="summaryMode">
         <option value="bullets">Bullets</option>
         <option value="detailed">Deeper paragraphs</option>
@@ -123,7 +176,7 @@
 
     <label>
       <input type="checkbox" id="includeTimestamps" checked />
-      Include timestamps in results
+      Include clickable timestamps
     </label>
 
     <div class="custom-prompt" id="customPromptContainer" hidden>
@@ -181,7 +234,7 @@
       <p class="help">Runs locally on your machine. Install Ollama and pull a model first.</p>
     </section>
 
-    <p class="hint">Keys are stored locally via Chrome sync.</p>
+    <p class="hint">Ask questions about any video content! Keys stored locally via Chrome sync.</p>
     <script src="popup.js" type="module"></script>
   </body>
 </html>

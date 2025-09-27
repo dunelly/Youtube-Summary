@@ -5,7 +5,10 @@ export const DEFAULT_SETTINGS = {
   provider: 'openrouter',
   summaryMode: 'bullets',
   customPrompt: '',
-  includeTimestamps: true
+  includeTimestamps: true,
+  summaryCount: 0,
+  isPremium: false,
+  premiumCode: ''
 };
 
 export class SettingsManager {
@@ -23,7 +26,10 @@ export class SettingsManager {
         'provider',
         'summaryMode',
         'customPrompt',
-        'includeTimestamps'
+        'includeTimestamps',
+        'summaryCount',
+        'isPremium',
+        'premiumCode'
       ]);
       if (Object.prototype.hasOwnProperty.call(stored, 'autoSummarize')) {
         this.values.autoSummarize = Boolean(stored.autoSummarize);
@@ -32,12 +38,18 @@ export class SettingsManager {
       this.values.summaryMode = stored.summaryMode || this.defaults.summaryMode || 'bullets';
       this.values.customPrompt = stored.customPrompt || this.defaults.customPrompt || '';
       this.values.includeTimestamps = stored.includeTimestamps !== false;
+      this.values.summaryCount = typeof stored.summaryCount === 'number' ? stored.summaryCount : this.defaults.summaryCount;
+      this.values.isPremium = Boolean(stored.isPremium);
+      this.values.premiumCode = stored.premiumCode || this.defaults.premiumCode || '';
     } catch (error) {
       console.warn('[YAIVS] Failed to load settings', error);
       this.values.provider = this.defaults.provider || 'gemini';
       this.values.summaryMode = this.defaults.summaryMode || 'bullets';
       this.values.customPrompt = this.defaults.customPrompt || '';
       this.values.includeTimestamps = true;
+      this.values.summaryCount = this.defaults.summaryCount || 0;
+      this.values.isPremium = this.defaults.isPremium || false;
+      this.values.premiumCode = this.defaults.premiumCode || '';
     }
     return this.values;
   }
@@ -71,6 +83,21 @@ export class SettingsManager {
       patched = true;
     }
 
+    if (Object.prototype.hasOwnProperty.call(changes, 'summaryCount')) {
+      this.values.summaryCount = typeof changes.summaryCount.newValue === 'number' ? changes.summaryCount.newValue : 0;
+      patched = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(changes, 'isPremium')) {
+      this.values.isPremium = Boolean(changes.isPremium.newValue);
+      patched = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(changes, 'premiumCode')) {
+      this.values.premiumCode = changes.premiumCode.newValue || '';
+      patched = true;
+    }
+
     if (patched && typeof this.onChange === 'function') {
       this.onChange({ ...this.values });
     }
@@ -82,5 +109,37 @@ export class SettingsManager {
 
   subscribe(callback) {
     this.onChange = callback;
+  }
+
+  // Usage tracking methods
+  async incrementSummaryCount() {
+    const newCount = this.values.summaryCount + 1;
+    await chrome.storage.sync.set({ summaryCount: newCount });
+    this.values.summaryCount = newCount;
+    return newCount;
+  }
+
+  canUseSummary() {
+    return this.values.isPremium || this.values.summaryCount < 50;
+  }
+
+  getRemainingCount() {
+    if (this.values.isPremium) return 'unlimited';
+    return Math.max(0, 50 - this.values.summaryCount);
+  }
+
+  // Premium validation
+  async validatePremiumCode(code) {
+    const validCodes = ['PREMIUM2025']; // Can be expanded later
+    if (validCodes.includes(code.trim().toUpperCase())) {
+      await chrome.storage.sync.set({ 
+        isPremium: true, 
+        premiumCode: code.trim().toUpperCase() 
+      });
+      this.values.isPremium = true;
+      this.values.premiumCode = code.trim().toUpperCase();
+      return true;
+    }
+    return false;
   }
 }

@@ -238,6 +238,15 @@ export class SummaryPanel {
     if (!this.unifiedBtn || this.unifiedBtn.disabled) return;
     if (this.promptInput) this.updateSendVisibility();
 
+    // Check usage limit before proceeding
+    await this.settings.ready;
+    if (!this.settings.canUseSummary()) {
+      const remaining = this.settings.getRemainingCount();
+      this.updateStatus(`You've reached the 50 summary limit. Upgrade to premium for unlimited access!`, 'error');
+      this.showUpgradePrompt();
+      return;
+    }
+
     const videoId = this.transcriptService.getVideoId();
     if (videoId) this.autoTriggeredVideoId = videoId;
 
@@ -254,7 +263,15 @@ export class SummaryPanel {
       this.setLoading(true, `Summarizing (${modeLabel}) with ${this.getProviderLabel(provider)}…`);
       const summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds, overrides);
       this.renderSummary(summary);
-      this.updateStatus(`Summary ready (${this.getProviderLabel(provider)} — ${modeLabel}).`, 'success');
+      
+      // Increment usage counter after successful summary
+      await this.settings.incrementSummaryCount();
+      const remaining = this.settings.getRemainingCount();
+      const statusMessage = this.settings.get('isPremium') 
+        ? `Summary ready (${this.getProviderLabel(provider)} — ${modeLabel}).`
+        : `Summary ready (${remaining} summaries remaining).`;
+      
+      this.updateStatus(statusMessage, 'success');
     } catch (error) {
       console.error('[YAIVS v2] Summary generation failed', error);
       this.renderSummary('');
@@ -595,6 +612,25 @@ export class SummaryPanel {
         return 'Custom';
       default:
         return 'Simple';
+    }
+  }
+
+  showUpgradePrompt() {
+    // Create upgrade prompt overlay in the summary area
+    if (this.summaryEl) {
+      this.summaryEl.innerHTML = `
+        <div class="yaivs-upgrade-prompt">
+          <h3>🚀 Upgrade to Premium</h3>
+          <p>You've used all 50 free summaries. Get unlimited access:</p>
+          <div class="yaivs-upgrade-actions">
+            <a href="https://www.paypal.com/ncp/payment/YQF6YXJSRQNTY" target="_blank" class="yaivs-upgrade-btn">
+              Pay $7.99 via PayPal
+            </a>
+          </div>
+          <p class="yaivs-upgrade-note">After payment, you'll receive a premium code to enter in settings.</p>
+        </div>
+      `;
+      this.summaryEl.hidden = false;
     }
   }
 }

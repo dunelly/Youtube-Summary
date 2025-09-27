@@ -6,6 +6,13 @@ const summaryModeSelect = document.getElementById('summaryMode');
 const customPromptContainer = document.getElementById('customPromptContainer');
 const customPromptTextarea = document.getElementById('customPrompt');
 const includeTimestampsToggle = document.getElementById('includeTimestamps');
+// Usage and premium elements
+const usageDisplay = document.getElementById('usageDisplay');
+const premiumSection = document.getElementById('premiumSection');
+const upgradeSection = document.getElementById('upgradeSection');
+const premiumCodeInput = document.getElementById('premiumCode');
+const validateCodeBtn = document.getElementById('validateCode');
+const premiumStatus = document.getElementById('premiumStatus');
 const keyInputs = {
   gemini: document.getElementById('geminiKey'),
   gpt: document.getElementById('openaiKey'),
@@ -39,7 +46,10 @@ async function load() {
       'ollamaModel',
       'summaryMode',
       'customPrompt',
-      'includeTimestamps'
+      'includeTimestamps',
+      'summaryCount',
+      'isPremium',
+      'premiumCode'
     ]);
 
     toggle.checked = Boolean(stored.autoSummarize);
@@ -79,6 +89,10 @@ async function load() {
 
     // No experimental flag anymore; v2 is default.
 
+    // Load and display usage information
+    updateUsageDisplay(stored);
+    updatePremiumSections(stored);
+
     // Attempt to inject the loader for users with "on click" site access.
     maybeInjectOnActiveYouTubeTab();
   } catch (error) {
@@ -107,6 +121,87 @@ function highlightActiveKey() {
     }
   });
   updateStatus(toggle.checked);
+}
+
+function updateUsageDisplay(stored) {
+  const summaryCount = stored.summaryCount || 0;
+  const isPremium = Boolean(stored.isPremium);
+  
+  if (usageDisplay) {
+    if (isPremium) {
+      usageDisplay.innerHTML = `<strong>✨ Premium Member</strong> - Unlimited summaries`;
+      usageDisplay.style.color = '#4caf50';
+    } else {
+      const remaining = Math.max(0, 50 - summaryCount);
+      usageDisplay.innerHTML = `<strong>${summaryCount}/50</strong> summaries used - ${remaining} remaining`;
+      if (remaining <= 5) {
+        usageDisplay.style.color = '#ff6b00';
+      } else {
+        usageDisplay.style.color = '';
+      }
+    }
+  }
+}
+
+function updatePremiumSections(stored) {
+  const isPremium = Boolean(stored.isPremium);
+  const summaryCount = stored.summaryCount || 0;
+  
+  if (isPremium) {
+    // User is premium - show premium code input for reference
+    if (premiumSection) premiumSection.hidden = false;
+    if (upgradeSection) upgradeSection.hidden = true;
+    if (premiumCodeInput) premiumCodeInput.value = stored.premiumCode || '';
+    if (premiumStatus) {
+      premiumStatus.textContent = '✅ Premium active';
+      premiumStatus.style.color = '#4caf50';
+    }
+  } else if (summaryCount >= 45) {
+    // Show upgrade prompt when approaching limit
+    if (premiumSection) premiumSection.hidden = false;
+    if (upgradeSection) upgradeSection.hidden = false;
+    if (premiumStatus) premiumStatus.textContent = '';
+  } else {
+    // Hide premium sections for new users
+    if (premiumSection) premiumSection.hidden = true;
+    if (upgradeSection) upgradeSection.hidden = true;
+  }
+}
+
+async function validatePremiumCode() {
+  const code = premiumCodeInput?.value?.trim();
+  if (!code) {
+    if (premiumStatus) {
+      premiumStatus.textContent = '❌ Please enter a premium code';
+      premiumStatus.style.color = '#f44336';
+    }
+    return;
+  }
+
+  // Validate the code (matches the logic in settings.js)
+  const validCodes = ['PREMIUM2025'];
+  if (validCodes.includes(code.toUpperCase())) {
+    // Save premium status
+    await chrome.storage.sync.set({ 
+      isPremium: true, 
+      premiumCode: code.toUpperCase() 
+    });
+    
+    if (premiumStatus) {
+      premiumStatus.textContent = '✅ Premium activated!';
+      premiumStatus.style.color = '#4caf50';
+    }
+    
+    // Refresh the display
+    const stored = await chrome.storage.sync.get(['summaryCount', 'isPremium', 'premiumCode']);
+    updateUsageDisplay(stored);
+    updatePremiumSections(stored);
+  } else {
+    if (premiumStatus) {
+      premiumStatus.textContent = '❌ Invalid premium code';
+      premiumStatus.style.color = '#f44336';
+    }
+  }
 }
 
 toggle.addEventListener('change', () => {
@@ -188,6 +283,21 @@ if (ollamaModelSelect) {
     chrome.storage.sync
       .set({ ollamaModel: value })
       .catch(error => console.error('[YAIVS] Failed to save Ollama model', error));
+  });
+}
+
+// Premium code validation event listener
+if (validateCodeBtn) {
+  validateCodeBtn.addEventListener('click', validatePremiumCode);
+}
+
+// Also allow Enter key in premium code input
+if (premiumCodeInput) {
+  premiumCodeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      validatePremiumCode();
+    }
   });
 }
 
