@@ -115,7 +115,7 @@ export function injectStyles() {
         display: flex;
         align-items: center;
         padding: 0;
-        border-radius: 20px;
+        border-radius: 18px;
         border: none;
         background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
         color: var(--yt-spec-text-primary, #0f0f0f);
@@ -124,7 +124,7 @@ export function injectStyles() {
         transition: all 0.2s ease, transform 0.2s ease;
         overflow: hidden;
         flex-shrink: 0;
-        height: 44px;
+        height: 36px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
         animation: subtlePulse 2s ease-in-out infinite;
       }
@@ -132,7 +132,7 @@ export function injectStyles() {
       .yaivs-unified-main {
         display: flex;
         align-items: center;
-        padding: 0 12px;
+        padding: 0 10px;
         flex: 1;
         transition: background 0.1s ease;
         height: 100%;
@@ -145,26 +145,28 @@ export function injectStyles() {
         font-size: 14px;
       }
 
+      .yaivs-unified-main:hover {
+        background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
+      }
+
       .yaivs-unified-dropdown {
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 0 8px;
+        padding: 0 6px;
         border-left: 1px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.1));
         transition: background 0.1s ease;
-        min-width: 24px;
+        min-width: 20px;
         position: relative;
         height: 100%;
       }
 
+      .yaivs-unified-dropdown:hover {
+        background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
+      }
+
       .yaivs-text { font-size: 15px; font-weight: 500; letter-spacing: 0.25px; }
       .yaivs-arrow { font-size: 14px; line-height: 1; opacity: 0.8; }
-
-      .yaivs-unified-button:hover {
-        background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
-      }
       .yaivs-unified-button:disabled {
         background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
         color: var(--yt-spec-text-disabled, rgba(0, 0, 0, 0.38));
