@@ -112,17 +112,73 @@ function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius, color, rotation
   ctx.shadowBlur = 0;
 }
 
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   setColoredYIcon();
   try {
     if (details?.reason === 'install') {
-      const url = chrome.runtime.getURL('onboarding/index.html');
-      chrome.tabs.create({ url }).catch((error) => {
-        console.error('Failed to open onboarding page:', error);
-      });
+      console.log('[YAIVS Background] Extension installed, starting onboarding');
+      
+      // Add a small delay to ensure Chrome is ready (helps with Windows)
+      setTimeout(async () => {
+        try {
+          const url = chrome.runtime.getURL('onboarding/index.html');
+          console.log('[YAIVS Background] Opening onboarding URL:', url);
+          
+          // Try creating a tab first
+          let tab = null;
+          try {
+            tab = await chrome.tabs.create({ url, active: true });
+            console.log('[YAIVS Background] Onboarding tab created:', tab?.id, 'on platform:', navigator.platform);
+          } catch (createErr) {
+            console.warn('[YAIVS Background] tabs.create failed, trying windows.create:', createErr?.message || createErr);
+            try {
+              const win = await chrome.windows.create({ url, focused: true, state: 'normal' });
+              const createdTab = win?.tabs && win.tabs[0] ? win.tabs[0] : null;
+              tab = createdTab || null;
+              console.log('[YAIVS Background] Onboarding window created:', win?.id, 'tab:', createdTab?.id);
+            } catch (winErr) {
+              console.error('[YAIVS Background] windows.create failed:', winErr?.message || winErr);
+              throw winErr;
+            }
+          }
+          
+          // Store the onboarding tab for potential debugging
+          if (tab?.id) {
+            await chrome.storage.local.set({ 
+              onboardingTabId: tab.id,
+              onboardingStartTime: Date.now(),
+              platform: navigator.platform
+            });
+          }
+        } catch (error) {
+          console.error('[YAIVS Background] Failed to open onboarding page:', error);
+          
+          // Fallback: Try opening in a different way
+          setTimeout(async () => {
+            const fallbackUrl = chrome.runtime.getURL('onboarding/index.html');
+            try {
+              const tab = await chrome.tabs.create({ url: fallbackUrl, active: false });
+              if (tab?.id) {
+                await chrome.tabs.update(tab.id, { active: true });
+                console.log('[YAIVS Background] Onboarding opened via tabs fallback');
+                return;
+              }
+              throw new Error('tabs.create returned no tab');
+            } catch (fb1) {
+              console.warn('[YAIVS Background] tabs fallback failed, trying windows fallback:', fb1?.message || fb1);
+              try {
+                await chrome.windows.create({ url: fallbackUrl, focused: true, state: 'normal' });
+                console.log('[YAIVS Background] Onboarding opened via windows fallback');
+              } catch (fb2) {
+                console.error('[YAIVS Background] windows fallback also failed:', fb2?.message || fb2);
+              }
+            }
+          }, 1000);
+        }
+      }, 500); // 500ms delay to ensure Chrome is ready
     }
   } catch (error) {
-    console.error('Error in onInstalled listener:', error);
+    console.error('[YAIVS Background] Error in onInstalled listener:', error);
   }
 });
 
@@ -589,6 +645,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       stopTrackingSession(tabId);
       sendResponse({ status: 'ok' });
     }
+    return true;
+  }
+
+  if (request?.type === 'openOpenRouterOnboarding') {
+    (async () => {
+      try {
+        const url = chrome.runtime.getURL('onboarding/index.html');
+        let tab;
+        try {
+          tab = await chrome.tabs.create({ url, active: true });
+        } catch (e) {
+          // Fallback for Windows compatibility
+          const win = await chrome.windows.create({ url, focused: true, state: 'normal' });
+          tab = (win?.tabs && win.tabs[0]) ? win.tabs[0] : null;
+        }
+
+        if (tab?.id) {
+          sendResponse({ status: 'ok', tabId: tab.id });
+        } else {
+          sendResponse({ status: 'error', message: 'Failed to open onboarding page.' });
+        }
+      } catch (e) {
+        sendResponse({ status: 'error', message: e?.message || 'Failed to open onboarding page.' });
+      }
+    })();
     return true;
   }
 

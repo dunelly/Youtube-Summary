@@ -1,6 +1,15 @@
 (() => {
   console.log('[YAIVS Guide] OpenRouter guide script loaded');
   
+  // Add ping response handler for cross-platform debugging
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === 'YAIVS_PING') {
+      console.log('[YAIVS Guide] Received ping, responding');
+      sendResponse({ alive: true, script: 'openrouter_guide', url: window.location.href });
+      return true;
+    }
+  });
+  
   const STYLE = `
     .yaivs-guide { position: fixed; right: 16px; bottom: 16px; max-width: 360px; z-index: 999999; background: rgba(20,20,20,0.92); color: #eaeaea; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 12px 14px; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     .yaivs-guide h3 { margin: 0 0 6px; font-size: 15px; }

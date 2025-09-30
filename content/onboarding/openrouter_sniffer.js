@@ -5,6 +5,15 @@
 
   console.log('[YAIVS Sniffer] OpenRouter key sniffer loaded on:', currentUrl);
 
+  // Add ping response handler for cross-platform debugging
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === 'YAIVS_PING') {
+      console.log('[YAIVS Sniffer] Received ping, responding');
+      sendResponse({ alive: true, script: 'openrouter_sniffer', url: window.location.href });
+      return true;
+    }
+  });
+
   function isAPIPage() {
     const url = window.location.href;
     const path = window.location.pathname;

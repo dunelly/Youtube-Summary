@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Recap",
+  "name": "YouTube AI Ask and Summarize",
   "version": "0.6.0",
   "description": "Ask questions about any YouTube video and get instant answers with clickable timestamps. Interactive AI Q&A with video navigation.",
   "permissions": [
@@ -23,7 +23,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "YouTube Recap Settings",
+    "default_title": "YouTube AI Ask and Summarize",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

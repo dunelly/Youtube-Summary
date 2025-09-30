@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>YouTube Recap Settings</title>
+    <title>YouTube AI Ask and Summarize</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -125,7 +125,7 @@
     </style>
   </head>
   <body>
-    <h1>YouTube Recap</h1>
+    <h1>YouTube AI Ask and Summarize</h1>
     <label>
       <input type="checkbox" id="autoSummarize" />
       Auto recap & Q&A
@@ -189,6 +189,10 @@
     <section class="key-section" data-provider="openrouter">
       <label class="key-label" for="openrouterKey">OpenRouter API key</label>
       <input type="password" id="openrouterKey" placeholder="Paste OpenRouter key (works with DeepSeek free)" autocomplete="off" />
+      <div class="row" style="margin-top: 6px; gap: 8px; align-items: center;">
+        <button type="button" id="getOpenRouterKey" style="padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4); background: #3ea6ff; color: #fff; font: inherit; cursor: pointer;">Get free key</button>
+        <span style="font-size: 11px; color: rgba(128,128,128,0.9);">Opens a guided setup</span>
+      </div>
       <div class="model-row">
         <label class="key-label" for="openrouterModel">Model</label>
         <select id="openrouterModel">

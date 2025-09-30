@@ -173,6 +173,7 @@ export function injectStyles() {
       .yaivs-status--error { color: var(--yt-spec-brand-danger, #d93025); }
 
       .yaivs-summary { margin: 0; padding: 0; border: none; background: transparent; font-family: inherit; font-size: 14px; line-height: 1.6; white-space: normal; color: var(--yt-spec-text-primary, #0f0f0f); }
+      .yaivs-summary p { padding-left: 1.5em; text-indent: -1.5em; }
       .yaivs-summary.collapsed { max-height: 360px; overflow: hidden; }
       .yaivs-tools { display: flex; align-items: center; gap: 8px; }
       .yaivs-tool { border: none; background: transparent; color: var(--yt-spec-text-secondary, #606060); font: inherit; font-size: 12px; cursor: pointer; }

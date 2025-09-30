@@ -50,10 +50,10 @@ export class SummaryPanel {
     container.className = 'yaivs-panel';
     container.innerHTML = `
       <header class="yaivs-panel__header">
-        <h2 class="yaivs-panel__title">AI Summary</h2>
+        <h2 class="yaivs-panel__title">AI Q&A & Summary</h2>
         <button class="yaivs-button" type="button" id="yaivs-generate">Summarize with Gemini</button>
       </header>
-      <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
+      <p class="yaivs-status yaivs-status--info" id="yaivs-status">Ask questions or click to summarize this video.</p>
       <pre class="yaivs-summary" id="yaivs-summary" hidden></pre>
     `;
     return container;
@@ -84,7 +84,7 @@ export class SummaryPanel {
     }
 
     if (this.statusEl) {
-      this.statusEl.textContent = 'Click to summarize the current video.';
+      this.statusEl.textContent = 'Ask questions or click to summarize this video.';
       this.statusEl.className = 'yaivs-status yaivs-status--info';
     }
 

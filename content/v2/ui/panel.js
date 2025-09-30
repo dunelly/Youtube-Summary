@@ -104,11 +104,9 @@ export class SummaryPanel {
       <div class="yaivs-onboarding" id="yaivs-onboarding" hidden>
         <div class="yaivs-onb-text">Connect a free OpenRouter key to start summarizing.</div>
         <div class="yaivs-onb-actions">
-          <button type="button" class="yaivs-onb-btn" id="yaivs-onb-get">Get free key</button>
-          <button type="button" class="yaivs-onb-btn" id="yaivs-onb-paste">Paste from clipboard</button>
-          <button type="button" class="yaivs-onb-btn" id="yaivs-onb-test">Test key</button>
+          <button type="button" class="yaivs-onb-btn" id="yaivs-onb-get">Start Setup (Get Free Key)</button>
         </div>
-        <div class="yaivs-onb-hint">We’ll auto-detect the key on the OpenRouter keys page.</div>
+        <div class="yaivs-onb-hint">We'll guide you through getting a free API key in just a few clicks.</div>
       </div>
       <div class="yaivs-summary" id="yaivs-summary" hidden></div>
     `;
@@ -132,8 +130,6 @@ export class SummaryPanel {
     this.toggleBtn = null;
     this.onboardingEl = panel.querySelector('#yaivs-onboarding');
     this.onbGetBtn = panel.querySelector('#yaivs-onb-get');
-    this.onbPasteBtn = panel.querySelector('#yaivs-onb-paste');
-    this.onbTestBtn = panel.querySelector('#yaivs-onb-test');
 
     if (this.generateHandler) {
       this.generateBtn.removeEventListener('click', this.generateHandler);
@@ -177,8 +173,6 @@ export class SummaryPanel {
       this.copyBtn.addEventListener('click', () => this.copySummary());
     }
     if (this.onbGetBtn) this.onbGetBtn.addEventListener('click', () => this.handleOnboardingGetKey());
-    if (this.onbPasteBtn) this.onbPasteBtn.addEventListener('click', () => this.handleOnboardingPaste());
-    if (this.onbTestBtn) this.onbTestBtn.addEventListener('click', () => this.handleOnboardingTest());
 
     this.updateInfoMessage();
     this.updateOnboardingVisibility();
@@ -241,8 +235,12 @@ export class SummaryPanel {
     // Check usage limit before proceeding
     await this.settings.ready;
     if (!this.settings.canUseSummary()) {
-      const remaining = this.settings.getRemainingCount();
-      this.updateStatus(`You've reached the 50 summary limit. Upgrade to premium for unlimited access!`, 'error');
+      const totalCount = this.settings.get('summaryCount');
+      if (totalCount < 150) {
+        this.updateStatus(`You've reached the 150 summary limit. Upgrade to premium for unlimited access!`, 'error');
+      } else {
+        this.updateStatus(`You've used all 10 summaries today. Try again tomorrow or upgrade to premium!`, 'error');
+      }
       this.showUpgradePrompt();
       return;
     }
@@ -263,14 +261,21 @@ export class SummaryPanel {
       this.setLoading(true, `Summarizing (${modeLabel}) with ${this.getProviderLabel(provider)}…`);
       const summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds, overrides);
       this.renderSummary(summary);
-      
+
       // Increment usage counter after successful summary
       await this.settings.incrementSummaryCount();
       const remaining = this.settings.getRemainingCount();
-      const statusMessage = this.settings.get('isPremium') 
-        ? `Summary ready (${this.getProviderLabel(provider)} — ${modeLabel}).`
-        : `Summary ready (${remaining} summaries remaining).`;
-      
+      const totalCount = this.settings.get('summaryCount');
+
+      let statusMessage;
+      if (this.settings.get('isPremium')) {
+        statusMessage = `Summary ready (${this.getProviderLabel(provider)} — ${modeLabel}).`;
+      } else if (totalCount <= 150) {
+        statusMessage = `Summary ready (${remaining} summaries remaining).`;
+      } else {
+        statusMessage = `Summary ready (${remaining} summaries remaining today).`;
+      }
+
       this.updateStatus(statusMessage, 'success');
     } catch (error) {
       console.error('[YAIVS v2] Summary generation failed', error);
@@ -389,50 +394,14 @@ export class SummaryPanel {
 
   async handleOnboardingGetKey() {
     try {
-      const origin = 'https://openrouter.ai/*';
-      const has = await chrome.permissions.contains({ origins: [origin] });
-      if (!has) {
-        const granted = await chrome.permissions.request({ origins: [origin] });
-        if (!granted) {
-          this.updateStatus('Permission denied. Use Paste from clipboard.', 'error');
-          return;
-        }
+      const response = await chrome.runtime.sendMessage({ type: 'openOpenRouterOnboarding' });
+      if (response?.status === 'ok') {
+        this.updateStatus('Opening guided setup. Follow the steps to get your free key.', 'success');
+      } else {
+        this.updateStatus(response?.message || 'Failed to open onboarding page.', 'error');
       }
-      const tab = await chrome.tabs.create({ url: 'https://openrouter.ai/keys', active: true });
-      if (tab?.id) {
-        setTimeout(() => {
-          chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/onboarding/openrouter_sniffer.js'] }).catch(() => {});
-        }, 1200);
-      }
-      this.updateStatus('Opened OpenRouter keys page. We will auto-detect the key.', 'success');
     } catch (e) {
-      this.updateStatus('Failed to open OpenRouter keys page.', 'error');
-    }
-  }
-
-  async handleOnboardingPaste() {
-    try {
-      const text = await navigator.clipboard.readText();
-      const key = (text || '').trim();
-      if (!/^sk-or-/i.test(key)) {
-        this.updateStatus('Clipboard does not contain an OpenRouter key.', 'error');
-        return;
-      }
-      await chrome.storage.sync.set({ openrouterKey: key });
-      this.updateStatus('OpenRouter key saved.', 'success');
-      this.updateOnboardingVisibility();
-    } catch (e) {
-      this.updateStatus('Clipboard blocked. Paste into Settings instead.', 'error');
-    }
-  }
-
-  async handleOnboardingTest() {
-    try {
-      const res = await chrome.runtime.sendMessage({ type: 'testOpenRouterKey' });
-      if (res?.status === 'ok') this.updateStatus('Key works ✓', 'success');
-      else this.updateStatus(res?.message || 'Key test failed.', 'error');
-    } catch (e) {
-      this.updateStatus('Key test failed.', 'error');
+      this.updateStatus('Failed to open onboarding page.', 'error');
     }
   }
 
@@ -621,7 +590,7 @@ export class SummaryPanel {
       this.summaryEl.innerHTML = `
         <div class="yaivs-upgrade-prompt">
           <h3>🚀 Upgrade to Premium</h3>
-          <p>You've used all 50 free summaries. Get unlimited access:</p>
+          <p>You've used all 150 free summaries. Get unlimited access:</p>
           <div class="yaivs-upgrade-actions">
             <a href="https://www.paypal.com/ncp/payment/YQF6YXJSRQNTY" target="_blank" class="yaivs-upgrade-btn">
               Pay $7.99 via PayPal

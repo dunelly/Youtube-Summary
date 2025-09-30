@@ -42,6 +42,7 @@
   async function startSetup() {
     try {
       console.log('[YAIVS Onboarding] Starting setup...');
+      setStatus('Setting up...');
       
       // Set default model
       await chrome.storage.sync.set({ provider: 'openrouter', openrouterModel: 'x-ai/grok-4-fast:free' });
@@ -55,20 +56,83 @@
       
       if (!has) {
         console.log('[YAIVS Onboarding] Requesting permission...');
+        setStatus('Requesting permission for OpenRouter.ai...');
+        
+        // Add delay before permission request for Windows compatibility
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         const ok = await chrome.permissions.request({ origins: [origin] });
         console.log('[YAIVS Onboarding] Permission granted:', ok);
         if (!ok) {
           setStatus('Permission denied. Please allow the extension to access OpenRouter.', 'err');
+          console.log('[YAIVS Onboarding] Permission denied by user');
           return;
         }
+        
+        // Additional delay after permission grant (Windows often needs this)
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
+      setStatus('Opening OpenRouter page...');
       console.log('[YAIVS Onboarding] Creating tab for:', url);
-      const tab = await chrome.tabs.create({ url, active: true });
-      console.log('[YAIVS Onboarding] Tab created:', tab?.id);
+      
+      // Windows Chrome sometimes has issues with immediate tab creation after permission
+      let tab;
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (!tab && attempts < maxAttempts) {
+        try {
+          attempts++;
+          console.log(`[YAIVS Onboarding] Tab creation attempt ${attempts}/${maxAttempts}`);
+          
+          // Prefer tabs.create first
+          try {
+            tab = await chrome.tabs.create({ url, active: true });
+            console.log('[YAIVS Onboarding] Tab created successfully:', tab?.id);
+          } catch (tabErr) {
+            console.warn('[YAIVS Onboarding] tabs.create failed, trying windows.create:', tabErr?.message || tabErr);
+            // Fallback: windows.create is often more reliable on Windows
+            try {
+              const win = await chrome.windows.create({ url, focused: true, state: 'normal' });
+              tab = (win?.tabs && win.tabs[0]) ? win.tabs[0] : null;
+              if (tab?.id) {
+                console.log('[YAIVS Onboarding] Window created, using tab:', tab.id);
+              } else {
+                throw new Error('windows.create returned no tab');
+              }
+            } catch (winErr) {
+              console.error('[YAIVS Onboarding] windows.create also failed:', winErr?.message || winErr);
+              throw winErr;
+            }
+          }
+          
+        } catch (tabError) {
+          console.error(`[YAIVS Onboarding] Tab creation attempt ${attempts} failed:`, tabError);
+          
+          if (attempts < maxAttempts) {
+            console.log('[YAIVS Onboarding] Retrying tab creation in 1 second...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } else {
+            throw new Error(`Failed to create tab after ${maxAttempts} attempts: ${tabError.message}`);
+          }
+        }
+      }
       
       if (tab?.id) {
         onboardingTabId = tab.id;
+        
+        // Store debugging info
+        await chrome.storage.local.set({
+          onboardingDebug: {
+            tabId: tab.id,
+            url: tab.url,
+            permissionGranted: true,
+            platform: navigator.platform || 'Unknown',
+            userAgent: navigator.userAgent,
+            setupStartTime: Date.now()
+          }
+        });
         
         // Start monitoring this tab for OAuth return (both local and background)
         startTabMonitoring(tab.id);
@@ -77,28 +141,50 @@
         try {
           await chrome.runtime.sendMessage({
             type: 'startOnboardingSession',
-            sessionInfo: { url, startTime: Date.now() }
+            sessionInfo: { url, startTime: Date.now(), platform: navigator.platform }
           });
           console.log('[YAIVS Onboarding] Registered session with background script');
         } catch (error) {
           console.log('[YAIVS Onboarding] Failed to register with background:', error);
         }
         
+        setStatus('Waiting for page to load...');
+        
         // Wait for tab to finish loading before injecting scripts
         await waitForTabLoading(tab.id);
         
         console.log('[YAIVS Onboarding] Injecting content scripts...');
+        setStatus('Loading helper scripts...');
+        
         const injectionSuccess = await injectOnboardingScripts(tab.id);
         
         if (injectionSuccess) {
           setStatus('Scripts loaded. Follow the guide to sign in and create your API key.');
+        } else {
+          // If injection fails, still provide useful guidance
+          setStatus('Guide loading failed, but you can still manually create your API key. Look for the "Create new key" button.', 'warning');
         }
       } else {
-        throw new Error('Failed to create tab');
+        throw new Error('Failed to create tab after multiple attempts');
       }
     } catch (e) {
       console.error('[YAIVS Onboarding] Setup failed:', e);
-      setStatus(`Setup failed: ${e.message}. Please try again.`, 'err');
+      
+      // Store error info for debugging
+      try {
+        await chrome.storage.local.set({
+          onboardingError: {
+            message: e.message,
+            stack: e.stack,
+            timestamp: Date.now(),
+            platform: navigator.platform || 'Unknown'
+          }
+        });
+      } catch (storageError) {
+        console.error('[YAIVS Onboarding] Failed to store error info:', storageError);
+      }
+      
+      setStatus(`Setup failed: ${e.message}. Try using manual setup instead.`, 'err');
     }
   }
 
@@ -166,21 +252,87 @@
   }
 
   async function injectOnboardingScripts(tabId) {
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: [
-          'content/onboarding/openrouter_sniffer.js',
-          'content/onboarding/openrouter_guide.js',
-        ]
-      });
-      console.log('[YAIVS Onboarding] Scripts injected successfully for tab:', tabId);
-      return true;
-    } catch (injectionError) {
-      console.error('[YAIVS Onboarding] Script injection failed:', injectionError);
-      setStatus(`Script injection failed: ${injectionError.message}. Try refreshing the OpenRouter page.`, 'err');
-      return false;
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      try {
+        attempts++;
+        console.log(`[YAIVS Onboarding] Script injection attempt ${attempts}/${maxAttempts} for tab:`, tabId);
+        
+        // Check if tab is still valid
+        try {
+          const tab = await chrome.tabs.get(tabId);
+          if (!tab || tab.url.includes('chrome://') || tab.url.includes('chrome-extension://')) {
+            throw new Error('Cannot inject into system pages');
+          }
+        } catch (tabError) {
+          throw new Error(`Tab validation failed: ${tabError.message}`);
+        }
+        
+        // Wait a bit more for the page to be ready (especially important on Windows)
+        if (attempts > 1) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+        
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: [
+            'content/onboarding/openrouter_sniffer.js',
+            'content/onboarding/openrouter_guide.js',
+          ]
+        });
+        
+        console.log('[YAIVS Onboarding] Scripts injected successfully for tab:', tabId);
+        
+        // Verify scripts are working by trying to send a test message
+        try {
+          await new Promise(resolve => setTimeout(resolve, 500)); // Let scripts initialize
+          const response = await chrome.tabs.sendMessage(tabId, { type: 'YAIVS_PING' });
+          if (response?.alive) {
+            console.log('[YAIVS Onboarding] Scripts are responding');
+            return true;
+          } else {
+            console.log('[YAIVS Onboarding] Scripts injected but not responding, retrying...');
+            if (attempts < maxAttempts) continue;
+          }
+        } catch (pingError) {
+          console.log('[YAIVS Onboarding] Scripts not responding to ping:', pingError.message);
+          if (attempts < maxAttempts) continue;
+        }
+        
+        return true;
+        
+      } catch (injectionError) {
+        console.error(`[YAIVS Onboarding] Script injection attempt ${attempts} failed:`, injectionError);
+        
+        if (attempts < maxAttempts) {
+          console.log('[YAIVS Onboarding] Retrying script injection...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          console.error('[YAIVS Onboarding] All injection attempts failed');
+          
+          // Store injection failure info for debugging
+          try {
+            await chrome.storage.local.set({
+              injectionError: {
+                message: injectionError.message,
+                attempts: maxAttempts,
+                tabId: tabId,
+                timestamp: Date.now(),
+                platform: navigator.platform || 'Unknown'
+              }
+            });
+          } catch (storageError) {
+            console.error('[YAIVS Onboarding] Failed to store injection error:', storageError);
+          }
+          
+          return false;
+        }
+      }
     }
+    
+    return false;
   }
   
   function startTabMonitoring(tabId) {
@@ -313,4 +465,69 @@
       saveManualKey();
     }
   });
+
+  // Add debugging function for troubleshooting
+  window.debugOnboarding = async function() {
+    console.log('[YAIVS Debug] Starting onboarding debug...');
+    
+    try {
+      const debugInfo = {
+        platform: navigator.platform,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+        location: window.location.href
+      };
+
+      // Get stored debug data
+      const stored = await chrome.storage.local.get(['onboardingDebug', 'onboardingError', 'injectionError']);
+      debugInfo.storedData = stored;
+
+      // Check permissions
+      try {
+        const hasPermission = await chrome.permissions.contains({ origins: ['https://openrouter.ai/*'] });
+        debugInfo.permissions = { openrouter: hasPermission };
+      } catch (permError) {
+        debugInfo.permissions = { error: permError.message };
+      }
+
+      console.log('[YAIVS Debug] Debug information:', debugInfo);
+      
+      // Show debug info to user
+      const debugElement = document.createElement('div');
+      debugElement.style.cssText = `
+        position: fixed; top: 10px; left: 10px; right: 10px; 
+        background: #f0f0f0; border: 2px solid #ccc; padding: 15px; 
+        border-radius: 8px; z-index: 10000; font-family: monospace; 
+        font-size: 12px; max-height: 300px; overflow-y: auto;
+      `;
+      debugElement.innerHTML = `
+        <h3>Onboarding Debug Info</h3>
+        <button onclick="this.parentElement.remove()" style="float: right;">Close</button>
+        <pre>${JSON.stringify(debugInfo, null, 2)}</pre>
+        <button onclick="navigator.clipboard.writeText('${JSON.stringify(debugInfo).replace(/'/g, "\\'")}')">Copy to Clipboard</button>
+      `;
+      document.body.appendChild(debugElement);
+      
+      return debugInfo;
+    } catch (error) {
+      console.error('[YAIVS Debug] Debug function failed:', error);
+      alert(`Debug failed: ${error.message}`);
+    }
+  };
+
+  // Show debug button if there are issues or on Windows
+  if (navigator.platform.includes('Win') || localStorage.getItem('yaivs-debug-mode')) {
+    const debugButton = document.createElement('button');
+    debugButton.textContent = 'Debug Info';
+    debugButton.style.cssText = `
+      position: fixed; bottom: 10px; left: 10px; 
+      background: #666; color: white; border: none; 
+      padding: 8px 12px; border-radius: 4px; cursor: pointer;
+      font-size: 12px; z-index: 9999;
+    `;
+    debugButton.onclick = () => window.debugOnboarding();
+    document.body.appendChild(debugButton);
+    
+    console.log('[YAIVS Onboarding] Debug mode enabled for Windows or debug flag');
+  }
 })();

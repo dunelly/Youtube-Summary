@@ -21,6 +21,7 @@ const keyInputs = {
   ollama: document.getElementById('ollamaUrl')
 };
 const openrouterModelSelect = document.getElementById('openrouterModel');
+const getOpenRouterKeyBtn = document.getElementById('getOpenRouterKey');
 const ollamaModelSelect = document.getElementById('ollamaModel');
 const keySections = Array.from(document.querySelectorAll('.key-section'));
 // No Chrome language list needed.
@@ -49,7 +50,9 @@ async function load() {
       'includeTimestamps',
       'summaryCount',
       'isPremium',
-      'premiumCode'
+      'premiumCode',
+      'dailyCount',
+      'lastResetDate'
     ]);
 
     toggle.checked = Boolean(stored.autoSummarize);
@@ -126,15 +129,27 @@ function highlightActiveKey() {
 function updateUsageDisplay(stored) {
   const summaryCount = stored.summaryCount || 0;
   const isPremium = Boolean(stored.isPremium);
-  
+  const dailyCount = stored.dailyCount || 0;
+  const lastResetDate = stored.lastResetDate || null;
+
   if (usageDisplay) {
     if (isPremium) {
       usageDisplay.innerHTML = `<strong>✨ Premium Member</strong> - Unlimited summaries`;
       usageDisplay.style.color = '#4caf50';
-    } else {
-      const remaining = Math.max(0, 50 - summaryCount);
-      usageDisplay.innerHTML = `<strong>${summaryCount}/50</strong> summaries used - ${remaining} remaining`;
+    } else if (summaryCount < 150) {
+      const remaining = Math.max(0, 150 - summaryCount);
+      usageDisplay.innerHTML = `<strong>${summaryCount}/150</strong> summaries used - ${remaining} remaining`;
       if (remaining <= 5) {
+        usageDisplay.style.color = '#ff6b00';
+      } else {
+        usageDisplay.style.color = '';
+      }
+    } else {
+      // After 150 summaries, show daily usage
+      const today = new Date().toDateString();
+      const dailyRemaining = lastResetDate === today ? Math.max(0, 10 - dailyCount) : 10;
+      usageDisplay.innerHTML = `<strong>${dailyCount}/10</strong> summaries used today - ${dailyRemaining} remaining`;
+      if (dailyRemaining <= 2) {
         usageDisplay.style.color = '#ff6b00';
       } else {
         usageDisplay.style.color = '';
@@ -342,3 +357,19 @@ async function ensureYouTubePermission() {
     // Ignore; permission request may fail in older Chrome or restricted contexts.
   }
 }
+
+// Open guided onboarding to fetch a free OpenRouter key (Windows-safe)
+getOpenRouterKeyBtn?.addEventListener('click', async () => {
+  try {
+    const url = chrome.runtime.getURL('onboarding/index.html');
+    try {
+      await chrome.tabs.create({ url, active: true });
+    } catch (e) {
+      await chrome.windows.create({ url, focused: true, state: 'normal' });
+    }
+    // Close the popup after launching onboarding
+    window.close();
+  } catch (err) {
+    console.error('[YAIVS] Failed to open onboarding:', err);
+  }
+});

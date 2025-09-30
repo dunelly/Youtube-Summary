@@ -8,7 +8,9 @@ export const DEFAULT_SETTINGS = {
   includeTimestamps: true,
   summaryCount: 0,
   isPremium: false,
-  premiumCode: ''
+  premiumCode: '',
+  dailyCount: 0,
+  lastResetDate: null
 };
 
 export class SettingsManager {
@@ -29,7 +31,9 @@ export class SettingsManager {
         'includeTimestamps',
         'summaryCount',
         'isPremium',
-        'premiumCode'
+        'premiumCode',
+        'dailyCount',
+        'lastResetDate'
       ]);
       if (Object.prototype.hasOwnProperty.call(stored, 'autoSummarize')) {
         this.values.autoSummarize = Boolean(stored.autoSummarize);
@@ -41,6 +45,8 @@ export class SettingsManager {
       this.values.summaryCount = typeof stored.summaryCount === 'number' ? stored.summaryCount : this.defaults.summaryCount;
       this.values.isPremium = Boolean(stored.isPremium);
       this.values.premiumCode = stored.premiumCode || this.defaults.premiumCode || '';
+      this.values.dailyCount = typeof stored.dailyCount === 'number' ? stored.dailyCount : this.defaults.dailyCount;
+      this.values.lastResetDate = stored.lastResetDate || this.defaults.lastResetDate;
     } catch (error) {
       console.warn('[YAIVS] Failed to load settings', error);
       this.values.provider = this.defaults.provider || 'gemini';
@@ -50,6 +56,8 @@ export class SettingsManager {
       this.values.summaryCount = this.defaults.summaryCount || 0;
       this.values.isPremium = this.defaults.isPremium || false;
       this.values.premiumCode = this.defaults.premiumCode || '';
+      this.values.dailyCount = this.defaults.dailyCount || 0;
+      this.values.lastResetDate = this.defaults.lastResetDate || null;
     }
     return this.values;
   }
@@ -98,6 +106,16 @@ export class SettingsManager {
       patched = true;
     }
 
+    if (Object.prototype.hasOwnProperty.call(changes, 'dailyCount')) {
+      this.values.dailyCount = typeof changes.dailyCount.newValue === 'number' ? changes.dailyCount.newValue : 0;
+      patched = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(changes, 'lastResetDate')) {
+      this.values.lastResetDate = changes.lastResetDate.newValue || null;
+      patched = true;
+    }
+
     if (patched && typeof this.onChange === 'function') {
       this.onChange({ ...this.values });
     }
@@ -113,19 +131,61 @@ export class SettingsManager {
 
   // Usage tracking methods
   async incrementSummaryCount() {
-    const newCount = this.values.summaryCount + 1;
-    await chrome.storage.sync.set({ summaryCount: newCount });
-    this.values.summaryCount = newCount;
-    return newCount;
+    // Check if we need to reset daily count (new day)
+    const today = new Date().toDateString();
+    if (this.values.lastResetDate !== today) {
+      await chrome.storage.sync.set({
+        dailyCount: 1,
+        lastResetDate: today,
+        summaryCount: this.values.summaryCount + 1
+      });
+      this.values.dailyCount = 1;
+      this.values.lastResetDate = today;
+      this.values.summaryCount = this.values.summaryCount + 1;
+    } else {
+      const newCount = this.values.summaryCount + 1;
+      const newDailyCount = this.values.dailyCount + 1;
+      await chrome.storage.sync.set({
+        summaryCount: newCount,
+        dailyCount: newDailyCount
+      });
+      this.values.summaryCount = newCount;
+      this.values.dailyCount = newDailyCount;
+    }
+    return this.values.summaryCount;
   }
 
   canUseSummary() {
-    return this.values.isPremium || this.values.summaryCount < 50;
+    if (this.values.isPremium) return true;
+
+    // First 150 summaries are always available
+    if (this.values.summaryCount < 150) return true;
+
+    // After 150, check daily limit
+    const today = new Date().toDateString();
+    if (this.values.lastResetDate !== today) {
+      // New day, reset available
+      return true;
+    }
+
+    // Check if under daily limit of 10
+    return this.values.dailyCount < 10;
   }
 
   getRemainingCount() {
     if (this.values.isPremium) return 'unlimited';
-    return Math.max(0, 50 - this.values.summaryCount);
+
+    // Before hitting 150, show total remaining
+    if (this.values.summaryCount < 150) {
+      return Math.max(0, 150 - this.values.summaryCount);
+    }
+
+    // After 150, show daily remaining
+    const today = new Date().toDateString();
+    if (this.values.lastResetDate !== today) {
+      return 10; // New day, all 10 available
+    }
+    return Math.max(0, 10 - this.values.dailyCount);
   }
 
   // Premium validation
