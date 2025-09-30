@@ -59,6 +59,32 @@ export function injectStyles() {
         position: relative;
       }
 
+      .yaivs-status-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+      }
+
+      .yaivs-ai-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(62, 166, 255, 0.15), rgba(138, 43, 226, 0.15));
+        border: 1px solid rgba(62, 166, 255, 0.3);
+        color: var(--yt-spec-text-primary, #0f0f0f);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        opacity: 1;
+        transition: opacity 0.5s ease;
+      }
+
+      .yaivs-ai-badge--fadeout {
+        opacity: 0;
+      }
+
       .yaivs-panel__header { display: none; }
 
       .yaivs-panel__title {
@@ -95,10 +121,12 @@ export function injectStyles() {
         color: var(--yt-spec-text-primary, #0f0f0f);
         font-family: "Roboto", "Arial", sans-serif;
         cursor: pointer;
-        transition: all 0.1s ease;
+        transition: all 0.2s ease, transform 0.2s ease;
         overflow: hidden;
         flex-shrink: 0;
         height: 44px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        animation: subtlePulse 2s ease-in-out infinite;
       }
 
       .yaivs-unified-main {
@@ -108,6 +136,13 @@ export function injectStyles() {
         flex: 1;
         transition: background 0.1s ease;
         height: 100%;
+        position: relative;
+      }
+
+      .yaivs-unified-main::before {
+        content: "✨";
+        margin-right: 6px;
+        font-size: 14px;
       }
 
       .yaivs-unified-dropdown {
@@ -125,8 +160,18 @@ export function injectStyles() {
       .yaivs-text { font-size: 15px; font-weight: 500; letter-spacing: 0.25px; }
       .yaivs-arrow { font-size: 14px; line-height: 1; opacity: 0.8; }
 
-      .yaivs-unified-button:hover { background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1)); }
-      .yaivs-unified-button:disabled { background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05)); color: var(--yt-spec-text-disabled, rgba(0, 0, 0, 0.38)); cursor: not-allowed; }
+      .yaivs-unified-button:hover {
+        background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+      }
+      .yaivs-unified-button:disabled {
+        background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.05));
+        color: var(--yt-spec-text-disabled, rgba(0, 0, 0, 0.38));
+        cursor: not-allowed;
+        animation: none;
+        box-shadow: none;
+      }
       .yaivs-unified-button:focus { outline: 2px solid rgba(62, 166, 255, 0.5); outline-offset: 2px; }
       .yaivs-unified-button:focus:not(:focus-visible) { outline: none; }
 
@@ -150,8 +195,8 @@ export function injectStyles() {
 
       .yaivs-style-menu {
         position: absolute;
-        left: 0;
-        right: auto;
+        left: auto;
+        right: 0;
         top: 100%;
         display: flex;
         flex-direction: column;
@@ -169,10 +214,40 @@ export function injectStyles() {
       .yaivs-style-menu > button { border: none; background: transparent; text-align: left; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: #eaeaea; }
       .yaivs-style-menu > button:hover { background: rgba(255,255,255,0.08); }
 
-      .yaivs-status--loading, .yaivs-status--success { color: var(--yt-spec-text-primary, #0f0f0f); }
+      @keyframes shimmer {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+      }
+
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.015); }
+      }
+
+      @keyframes subtlePulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.01); }
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .yaivs-status--loading {
+        color: var(--yt-spec-text-primary, #0f0f0f);
+        animation: shimmer 1.5s ease-in-out infinite;
+      }
+
+      .yaivs-status--success { color: var(--yt-spec-text-primary, #0f0f0f); }
       .yaivs-status--error { color: var(--yt-spec-brand-danger, #d93025); }
 
+      .yaivs-unified-button.yaivs-loading {
+        animation: pulse 2s ease-in-out infinite;
+      }
+
       .yaivs-summary { margin: 0; padding: 0; border: none; background: transparent; font-family: inherit; font-size: 14px; line-height: 1.6; white-space: normal; color: var(--yt-spec-text-primary, #0f0f0f); }
+      .yaivs-summary:not([hidden]) { animation: fadeIn 0.3s ease-out; }
       .yaivs-summary p { padding-left: 1.5em; text-indent: -1.5em; }
       .yaivs-summary.collapsed { max-height: 360px; overflow: hidden; }
       .yaivs-tools { display: flex; align-items: center; gap: 8px; }

@@ -72,7 +72,10 @@ export class SummaryPanel {
     container.className = 'yaivs-panel';
     container.innerHTML = `
       <div class="yaivs-header-row">
-        <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
+        <div class="yaivs-status-wrapper">
+          <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
+          <span class="yaivs-ai-badge" id="yaivs-ai-badge" hidden>✨ AI</span>
+        </div>
         <button class="yaivs-unified-button" type="button" id="yaivs-unified" aria-label="AI Summarize">
           <span class="yaivs-unified-main" id="yaivs-generate">
             <span class="yaivs-text">SUMMARIZE</span>
@@ -117,6 +120,7 @@ export class SummaryPanel {
     this.panel = panel;
     this.summaryEl = panel.querySelector('#yaivs-summary');
     this.statusEl = panel.querySelector('#yaivs-status');
+    this.aiBadgeEl = panel.querySelector('#yaivs-ai-badge');
     this.unifiedBtn = panel.querySelector('#yaivs-unified');
     this.generateBtn = panel.querySelector('#yaivs-generate');
     this.promptInput = panel.querySelector('#yaivs-prompt-input');
@@ -258,7 +262,7 @@ export class SummaryPanel {
       const modeLabel = this.getModeLabel(selectedMode);
       const { text: transcript, durationSeconds } = await this.transcriptService.collect();
 
-      this.setLoading(true, `Summarizing (${modeLabel}) with ${this.getProviderLabel(provider)}…`);
+      this.setLoading(true, `Summarizing…`);
       const summary = await this.summarizeUsingProvider(provider, transcript, durationSeconds, overrides);
       this.renderSummary(summary);
 
@@ -269,14 +273,15 @@ export class SummaryPanel {
 
       let statusMessage;
       if (this.settings.get('isPremium')) {
-        statusMessage = `Summary ready (${this.getProviderLabel(provider)} — ${modeLabel}).`;
+        statusMessage = `Summary ready`;
       } else if (totalCount <= 150) {
-        statusMessage = `Summary ready (${remaining} summaries remaining).`;
+        statusMessage = `${remaining} summaries remaining`;
       } else {
-        statusMessage = `Summary ready (${remaining} summaries remaining today).`;
+        statusMessage = `${remaining} remaining today`;
       }
 
       this.updateStatus(statusMessage, 'success');
+      this.showAIBadge();
     } catch (error) {
       console.error('[YAIVS v2] Summary generation failed', error);
       this.renderSummary('');
@@ -312,6 +317,14 @@ export class SummaryPanel {
   setLoading(isLoading, message) {
     if (!this.unifiedBtn) return;
     this.unifiedBtn.disabled = isLoading;
+
+    // Add/remove loading animation class
+    if (isLoading) {
+      this.unifiedBtn.classList.add('yaivs-loading');
+    } else {
+      this.unifiedBtn.classList.remove('yaivs-loading');
+    }
+
     const textSpan = this.unifiedBtn.querySelector('.yaivs-text');
     if (textSpan) textSpan.textContent = isLoading ? 'WORKING…' : 'SUMMARIZE';
     if (this.promptInput) this.promptInput.disabled = isLoading;
@@ -360,13 +373,11 @@ export class SummaryPanel {
 
   updateInfoMessage() {
     if (!this.statusEl || this.isSummarizing || !this.summaryEl?.hidden) return;
-    const providerLabel = this.getProviderLabel(this.settings.get('provider') || 'gemini');
-    const modeLabel = this.getModeLabel(this.settings.get('summaryMode') || 'bullets');
     if (this.settings.get('autoSummarize')) {
-      this.statusEl.textContent = `Preparing summary (${modeLabel}) with ${providerLabel}…`;
+      this.statusEl.textContent = `Preparing summary…`;
       this.statusEl.className = 'yaivs-status yaivs-status--loading';
     } else {
-      this.statusEl.textContent = `Click to summarize with ${providerLabel} — ${modeLabel}.`;
+      this.statusEl.textContent = `Ready to summarize`;
       this.statusEl.className = 'yaivs-status yaivs-status--info';
     }
   }
@@ -441,9 +452,9 @@ export class SummaryPanel {
 
   positionStyleMenu() {
     if (!this.styleMenu || !this.styleBtn || !this.panel) return;
-    const headerRow = this.panel.querySelector('.yaivs-header-row');
-    if (!headerRow) return;
-    const headerRect = headerRow.getBoundingClientRect();
+    const actionsRow = this.panel.querySelector('.yaivs-actions');
+    if (!actionsRow) return;
+    const actionsRect = actionsRow.getBoundingClientRect();
     const arrowSymbol = this.styleBtn.querySelector('.yaivs-arrow');
     const targetRect = arrowSymbol ? arrowSymbol.getBoundingClientRect() : this.styleBtn.getBoundingClientRect();
 
@@ -452,12 +463,12 @@ export class SummaryPanel {
     const menuRect = this.styleMenu.getBoundingClientRect();
 
     const dropdownRect = this.styleBtn.getBoundingClientRect();
-    const dropdownRight = dropdownRect.right - headerRect.left;
-    const dropdownBottom = dropdownRect.bottom - headerRect.top;
+    const dropdownRight = dropdownRect.right - actionsRect.left;
+    const dropdownBottom = dropdownRect.bottom - actionsRect.top;
 
     const desiredLeft = Math.round(dropdownRight - menuRect.width);
     const minLeft = 0;
-    const maxLeft = Math.max(0, Math.round(headerRect.width - menuRect.width));
+    const maxLeft = Math.max(0, Math.round(actionsRect.width - menuRect.width));
     const clampedLeft = Math.min(maxLeft, Math.max(minLeft, desiredLeft));
 
     this.styleMenu.style.left = `${clampedLeft}px`;
@@ -478,9 +489,52 @@ export class SummaryPanel {
   copySummary() {
     const text = this.lastRawSummary || this.summaryEl?.textContent || '';
     if (!text) return;
+
     navigator.clipboard?.writeText(text)
-      .then(() => this.updateStatus('Copied to clipboard.', 'success'))
+      .then(() => {
+        if (this.copyBtn) {
+          const originalText = this.copyBtn.textContent;
+          this.copyBtn.textContent = '✓ Copied!';
+          this.copyBtn.style.color = '#4caf50';
+          this.copyBtn.style.fontWeight = '600';
+
+          setTimeout(() => {
+            if (this.copyBtn) {
+              this.copyBtn.textContent = originalText;
+              this.copyBtn.style.color = '';
+              this.copyBtn.style.fontWeight = '';
+            }
+          }, 1500);
+        }
+        this.updateStatus('Copied to clipboard.', 'success');
+      })
       .catch(() => this.updateStatus('Copy failed.', 'error'));
+  }
+
+  showAIBadge() {
+    if (!this.aiBadgeEl) return;
+
+    // Clear any existing timeout
+    if (this.badgeTimeout) {
+      clearTimeout(this.badgeTimeout);
+    }
+
+    // Show badge
+    this.aiBadgeEl.hidden = false;
+    this.aiBadgeEl.classList.remove('yaivs-ai-badge--fadeout');
+
+    // Trigger fade out after 2.5 seconds
+    this.badgeTimeout = setTimeout(() => {
+      if (this.aiBadgeEl) {
+        this.aiBadgeEl.classList.add('yaivs-ai-badge--fadeout');
+        // Hide after animation completes
+        setTimeout(() => {
+          if (this.aiBadgeEl) {
+            this.aiBadgeEl.hidden = true;
+          }
+        }, 500);
+      }
+    }, 2500);
   }
 
   getPreset(style) {
@@ -534,10 +588,11 @@ export class SummaryPanel {
       await this.settings.ready;
       const provider = this.settings.get('provider') || 'gemini';
       const { text: transcript, durationSeconds } = await this.transcriptService.collect();
-      this.setLoading(true, `Answering with ${this.getProviderLabel(provider)}…`);
+      this.setLoading(true, `Answering…`);
       const answer = await this.askUsingProvider(provider, transcript, durationSeconds, value);
       this.renderSummary(answer);
-      this.updateStatus(`Answer ready (${this.getProviderLabel(provider)}).`, 'success');
+      this.updateStatus(`Answer ready`, 'success');
+      this.showAIBadge();
     } catch (error) {
       console.error('[YAIVS v2] Prompt failed', error);
       this.renderSummary('');
