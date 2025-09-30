@@ -186,7 +186,7 @@ chrome.runtime.onStartup?.addListener?.(() => {
   setColoredYIcon();
 });
 
-async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt, includeTimestamps }) {
+async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt, includeTimestamps, overrideModel }) {
   const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel', 'summaryMode', 'customPrompt', 'includeTimestamps']);
   const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
   const storedCustom = typeof customPrompt === 'string' ? customPrompt : settings.customPrompt;
@@ -197,13 +197,16 @@ async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, duratio
   const prompt = buildPromptInstructions(effectiveMode, durationSeconds, custom, useTimestamps);
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
 
+  // Use overrideModel if provided (for speed testing), otherwise use saved model
+  const openrouterModel = overrideModel || settings.openrouterModel;
+
   switch (provider) {
     case 'gpt':
       return summarizeWithOpenAI(userText, settings.openaiKey);
     case 'claude':
       return summarizeWithAnthropic(userText, settings.claudeKey);
     case 'openrouter':
-      return summarizeWithOpenRouter(userText, settings.openrouterKey, settings.openrouterModel);
+      return summarizeWithOpenRouter(userText, settings.openrouterKey, openrouterModel);
     case 'ollama':
       return summarizeWithOllama(userText, settings.ollamaUrl, settings.ollamaModel);
     default:
@@ -483,42 +486,89 @@ async function summarizeWithAnthropic(prompt, key) {
   return summary;
 }
 
+// Define fallback model order (priority: Grok → Llama → Gemini → DeepSeek → rest)
+const OPENROUTER_FALLBACK_MODELS = [
+  'x-ai/grok-4-fast:free',
+  'meta-llama/llama-3.2-3b-instruct:free',
+  'google/gemini-2.0-flash-exp:free',
+  'deepseek/deepseek-chat-v3.1:free',
+  'microsoft/phi-3-mini-128k-instruct:free',
+  'qwen/qwen-2-7b-instruct:free',
+  'mistralai/mistral-7b-instruct:free',
+  'nvidia/nemotron-nano-9b-v2:free'
+];
+
 async function summarizeWithOpenRouter(prompt, key, model) {
   if (!key) {
     throw new Error('OpenRouter API key is missing.');
   }
+
   const chosenModel = (model && String(model)) || 'x-ai/grok-4-fast:free';
-  const body = {
-    model: chosenModel,
-    messages: [
-      { role: 'system', content: 'You are a helpful assistant that summarizes YouTube transcripts.' },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.3
-  };
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${key}`,
-    // Optional but recommended by OpenRouter for attribution/rate-limits friendliness
-    'HTTP-Referer': chrome.runtime.getURL('popup.html'),
-    'X-Title': 'YouTube AI Video Summarizer'
-  };
+  // Try the chosen model first, then fallback models in order
+  const modelsToTry = [chosenModel, ...OPENROUTER_FALLBACK_MODELS.filter(m => m !== chosenModel)];
 
-  const response = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body)
-  });
+  let lastError = null;
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`OpenRouter request failed (${response.status}): ${text.slice(0, 200)}`);
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const currentModel = modelsToTry[i];
+
+    try {
+      const body = {
+        model: currentModel,
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant that summarizes YouTube transcripts.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3
+      };
+
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+        'HTTP-Referer': chrome.runtime.getURL('popup.html'),
+        'X-Title': 'YouTube AI Video Summarizer'
+      };
+
+      const response = await fetch(OPENROUTER_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`OpenRouter request failed (${response.status}): ${text.slice(0, 200)}`);
+      }
+
+      const data = await response.json();
+      const summary = data?.choices?.[0]?.message?.content || '';
+
+      if (!summary.trim()) {
+        throw new Error('OpenRouter response was empty.');
+      }
+
+      // Success! If we used a fallback model, log it
+      if (i > 0) {
+        console.log(`[YAIVS] Primary model "${chosenModel}" failed, successfully used fallback "${currentModel}"`);
+      }
+
+      return summary;
+
+    } catch (error) {
+      lastError = error;
+      console.warn(`[YAIVS] OpenRouter model "${currentModel}" failed:`, error.message);
+
+      // If this is not the last model, try the next one
+      if (i < modelsToTry.length - 1) {
+        console.log(`[YAIVS] Trying fallback model "${modelsToTry[i + 1]}"...`);
+        continue;
+      }
+    }
   }
-  const data = await response.json();
-  const summary = data?.choices?.[0]?.message?.content || '';
-  if (!summary.trim()) throw new Error('OpenRouter response was empty.');
-  return summary;
+
+  // All models failed
+  throw new Error(`All OpenRouter models failed. Last error: ${lastError?.message || 'Unknown error'}`);
 }
 
 async function summarizeWithOllama(prompt, url, model) {

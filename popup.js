@@ -24,6 +24,7 @@ const openrouterModelSelect = document.getElementById('openrouterModel');
 const getOpenRouterKeyBtn = document.getElementById('getOpenRouterKey');
 const ollamaModelSelect = document.getElementById('ollamaModel');
 const keySections = Array.from(document.querySelectorAll('.key-section'));
+const helpBtn = document.getElementById('helpBtn');
 // No Chrome language list needed.
 const defaultPlaceholders = {
   gemini: keyInputs.gemini?.placeholder || 'Paste Gemini key',
@@ -61,7 +62,11 @@ async function load() {
     keyInputs.gemini.value = stored.geminiKey || '';
     keyInputs.gpt.value = stored.openaiKey || '';
     keyInputs.claude.value = stored.claudeKey || '';
-    if (keyInputs.openrouter) keyInputs.openrouter.value = stored.openrouterKey || '';
+    if (keyInputs.openrouter) {
+      keyInputs.openrouter.value = stored.openrouterKey || '';
+      // Show/hide "Get free key" button based on whether key exists
+      toggleGetKeyButton();
+    }
     if (openrouterModelSelect) {
       openrouterModelSelect.value = stored.openrouterModel || 'x-ai/grok-4-fast:free';
     }
@@ -112,15 +117,16 @@ function highlightActiveKey() {
   keySections.forEach(section => {
     const sectionProvider = section.dataset.provider;
     if (sectionProvider === provider) {
+      // Show and highlight the active provider section
       section.classList.add('active');
+      section.style.display = 'flex';
       const input = section.querySelector('input');
       input.disabled = false;
       input.placeholder = defaultPlaceholders[sectionProvider];
     } else {
+      // Hide inactive provider sections
       section.classList.remove('active');
-      const input = section.querySelector('input');
-      input.disabled = false;
-      input.placeholder = defaultPlaceholders[sectionProvider];
+      section.style.display = 'none';
     }
   });
   updateStatus(toggle.checked);
@@ -316,7 +322,44 @@ if (premiumCodeInput) {
   });
 }
 
+// Help button - opens onboarding
+if (helpBtn) {
+  helpBtn.addEventListener('click', async () => {
+    try {
+      const url = chrome.runtime.getURL('onboarding/index.html');
+      try {
+        await chrome.tabs.create({ url, active: true });
+      } catch (e) {
+        await chrome.windows.create({ url, focused: true, state: 'normal' });
+      }
+      // Close the popup after launching onboarding
+      window.close();
+    } catch (err) {
+      console.error('[YAIVS] Failed to open onboarding:', err);
+    }
+  });
+}
+
 load();
+
+// Collapsible Usage & Premium section
+const usageHeader = document.getElementById('usageHeader');
+const usageContent = document.getElementById('usageContent');
+
+if (usageHeader && usageContent) {
+  usageHeader.addEventListener('click', () => {
+    const arrow = usageHeader.querySelector('.collapsible-arrow');
+    const isCollapsed = usageContent.classList.contains('collapsed');
+
+    if (isCollapsed) {
+      usageContent.classList.remove('collapsed');
+      arrow.classList.remove('collapsed');
+    } else {
+      usageContent.classList.add('collapsed');
+      arrow.classList.add('collapsed');
+    }
+  });
+}
 
 // No language state toggling needed.
 
@@ -324,6 +367,68 @@ function toggleCustomPromptVisibility() {
   if (!customPromptContainer || !summaryModeSelect) return;
   const isCustom = summaryModeSelect.value === 'custom';
   customPromptContainer.hidden = !isCustom;
+}
+
+// Smart "Get free key" button visibility
+function toggleGetKeyButton() {
+  const getKeyRow = document.getElementById('getKeyRow');
+  const openrouterKeyInput = keyInputs.openrouter;
+
+  if (!getKeyRow || !openrouterKeyInput) return;
+
+  // Show button only if key field is empty
+  const hasKey = openrouterKeyInput.value.trim().length > 0;
+  getKeyRow.style.display = hasKey ? 'none' : 'flex';
+}
+
+// Add event listener to OpenRouter key input to show/hide button
+if (keyInputs.openrouter) {
+  keyInputs.openrouter.addEventListener('input', toggleGetKeyButton);
+}
+
+// Help icon functionality
+const openrouterHelp = document.getElementById('openrouterHelp');
+let helpTooltip = null;
+
+if (openrouterHelp) {
+  openrouterHelp.addEventListener('click', (e) => {
+    e.stopPropagation();
+
+    // Remove existing tooltip if present
+    if (helpTooltip) {
+      helpTooltip.remove();
+      helpTooltip = null;
+      return;
+    }
+
+    // Create tooltip
+    helpTooltip = document.createElement('div');
+    helpTooltip.className = 'help-tooltip';
+    helpTooltip.innerHTML = `
+      <h4>Need an OpenRouter API Key?</h4>
+      <p><strong>New users:</strong> Click "Get free key" button below to get a free API key with guided setup.</p>
+      <p><strong>Have an account?</strong> Get your key at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a></p>
+      <p><strong>Free models:</strong> OpenRouter offers many free AI models including Grok, Llama, Gemini, and DeepSeek.</p>
+    `;
+
+    // Position near the help icon
+    const rect = openrouterHelp.getBoundingClientRect();
+    helpTooltip.style.top = `${rect.bottom + 5}px`;
+    helpTooltip.style.left = `${Math.max(10, rect.left - 140)}px`;
+
+    document.body.appendChild(helpTooltip);
+
+    // Close on click outside
+    setTimeout(() => {
+      document.addEventListener('click', function closeTooltip() {
+        if (helpTooltip) {
+          helpTooltip.remove();
+          helpTooltip = null;
+        }
+        document.removeEventListener('click', closeTooltip);
+      });
+    }, 10);
+  });
 }
 
 async function maybeInjectOnActiveYouTubeTab() {

@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#FF0000" stroke="#CC0000" stroke-width="2"/>
+  
+  <!-- YouTube play button triangle -->
+  <polygon points="48,40 48,88 88,64" fill="white"/>
+  
+  <!-- AI/Recap indicator - small circular badge -->
+  <circle cx="96" cy="32" r="16" fill="#4285F4" stroke="white" stroke-width="2"/>
+  
+  <!-- AI text in badge -->
+  <text x="96" y="38" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">AI</text>
+  
+  <!-- Subtle summary lines to indicate text/recap -->
+  <rect x="20" y="100" width="88" height="2" fill="white" opacity="0.8"/>
+  <rect x="20" y="106" width="72" height="2" fill="white" opacity="0.6"/>
+  <rect x="20" y="112" width="56" height="2" fill="white" opacity="0.4"/>
+</svg>

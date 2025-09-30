@@ -71,26 +71,17 @@ export class SummaryPanel {
     container.id = PANEL_ID;
     container.className = 'yaivs-panel';
     container.innerHTML = `
-      <div class="yaivs-header-row">
-        <div class="yaivs-status-wrapper">
-          <p class="yaivs-status yaivs-status--info" id="yaivs-status">Click to summarize the current video.</p>
-          <span class="yaivs-ai-badge" id="yaivs-ai-badge" hidden>✨ AI</span>
-        </div>
-        <button class="yaivs-unified-button" type="button" id="yaivs-unified" aria-label="AI Summarize">
-          <span class="yaivs-unified-main" id="yaivs-generate">
-            <span class="yaivs-text">SUMMARIZE</span>
-          </span>
-          <span class="yaivs-unified-dropdown" id="yaivs-menu" aria-label="Style options">
-            <span class="yaivs-arrow">▾</span>
-          </span>
-        </button>
-      </div>
       <div class="yaivs-actions" id="yaivs-actions">
-        <div class="yaivs-prompt" id="yaivs-prompt-row">
-          <div class="yaivs-input-wrap">
-            <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
-            <button class="yaivs-send" id="yaivs-send" aria-label="Send" hidden>↑</button>
-          </div>
+        <div class="yaivs-input-wrap">
+          <input class="yaivs-input" id="yaivs-prompt-input" type="text" placeholder="Ask about this video… (or leave blank to summarize)" aria-label="Ask about this video" />
+          <button class="yaivs-unified-button" type="button" id="yaivs-unified" aria-label="AI Summarize">
+            <span class="yaivs-unified-main" id="yaivs-generate">
+              <span class="yaivs-text">SUMMARIZE</span>
+            </span>
+            <span class="yaivs-unified-dropdown" id="yaivs-menu" aria-label="Style options">
+              <span class="yaivs-arrow">▾</span>
+            </span>
+          </button>
         </div>
         <div class="yaivs-style-menu" id="yaivs-style-menu" hidden>
           <button type="button" data-style="simple">Bullets</button>
@@ -99,6 +90,10 @@ export class SummaryPanel {
           <button type="button" data-style="proscons">Pros / Cons</button>
           <button type="button" data-style="recipe">Recipe</button>
           <button type="button" data-style="outline">Outline</button>
+        </div>
+        <div class="yaivs-status-wrapper">
+          <p class="yaivs-status yaivs-status--info" id="yaivs-status" hidden></p>
+          <span class="yaivs-ai-badge" id="yaivs-ai-badge" hidden>✨ AI</span>
         </div>
       </div>
       <div class="yaivs-tools" id="yaivs-tools" hidden>
@@ -312,6 +307,7 @@ export class SummaryPanel {
     if (!this.statusEl) return;
     this.statusEl.textContent = message;
     this.statusEl.className = `yaivs-status yaivs-status--${variant}`;
+    this.statusEl.hidden = false;
   }
 
   setLoading(isLoading, message) {
@@ -376,9 +372,10 @@ export class SummaryPanel {
     if (this.settings.get('autoSummarize')) {
       this.statusEl.textContent = `Preparing summary…`;
       this.statusEl.className = 'yaivs-status yaivs-status--loading';
+      this.statusEl.hidden = false;
     } else {
-      this.statusEl.textContent = `Ready to summarize`;
-      this.statusEl.className = 'yaivs-status yaivs-status--info';
+      // Hide status text when idle - it's redundant with placeholder
+      this.statusEl.hidden = true;
     }
   }
 
@@ -451,28 +448,8 @@ export class SummaryPanel {
   }
 
   positionStyleMenu() {
-    if (!this.styleMenu || !this.styleBtn || !this.panel) return;
-    const actionsRow = this.panel.querySelector('.yaivs-actions');
-    if (!actionsRow) return;
-    const actionsRect = actionsRow.getBoundingClientRect();
-    const arrowSymbol = this.styleBtn.querySelector('.yaivs-arrow');
-    const targetRect = arrowSymbol ? arrowSymbol.getBoundingClientRect() : this.styleBtn.getBoundingClientRect();
-
-    const prevLeft = this.styleMenu.style.left;
-    this.styleMenu.style.left = '0px';
-    const menuRect = this.styleMenu.getBoundingClientRect();
-
-    const dropdownRect = this.styleBtn.getBoundingClientRect();
-    const dropdownRight = dropdownRect.right - actionsRect.left;
-    const dropdownBottom = dropdownRect.bottom - actionsRect.top;
-
-    const desiredLeft = Math.round(dropdownRight - menuRect.width);
-    const minLeft = 0;
-    const maxLeft = Math.max(0, Math.round(actionsRect.width - menuRect.width));
-    const clampedLeft = Math.min(maxLeft, Math.max(minLeft, desiredLeft));
-
-    this.styleMenu.style.left = `${clampedLeft}px`;
-    this.styleMenu.style.top = `${dropdownBottom - 2}px`;
+    // CSS now handles positioning with absolute positioning relative to .yaivs-input-wrap
+    // No manual positioning needed
   }
 
   handleStyleMenuClick(event) {

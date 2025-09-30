@@ -51,19 +51,17 @@ export function injectStyles() {
         position: relative;
       }
 
-      .yaivs-header-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        position: relative;
-      }
-
       .yaivs-status-wrapper {
         display: flex;
         align-items: center;
         gap: 8px;
-        flex: 1;
+        margin-top: 6px;
+      }
+
+      .yaivs-status {
+        font-size: 13px;
+        margin: 0;
+        color: var(--yt-spec-text-secondary, #606060);
       }
 
       .yaivs-ai-badge {
@@ -177,29 +175,46 @@ export function injectStyles() {
       .yaivs-unified-button:focus { outline: 2px solid rgba(62, 166, 255, 0.5); outline-offset: 2px; }
       .yaivs-unified-button:focus:not(:focus-visible) { outline: none; }
 
-      .yaivs-actions { display: flex; align-items: center; position: relative; gap: 8px; width: 100%; overflow: visible; }
-
-      .yaivs-prompt { flex: 1; position: relative; }
-      .yaivs-input-wrap { position: relative; }
-      .yaivs-input {
+      .yaivs-actions {
+        display: flex;
+        flex-direction: column;
+        position: relative;
         width: 100%;
-        min-width: 220px;
-        max-width: 100%;
-        padding: 10px 42px 10px 14px;
+        overflow: visible;
+      }
+
+      .yaivs-input-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+      }
+
+      .yaivs-input {
+        flex: 1;
+        min-width: 0;
+        padding: 10px 14px;
         border-radius: 20px;
         border: 1px solid var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.1));
         background: var(--yt-spec-brand-background-primary, rgba(255, 255, 255, 0.06));
         color: var(--yt-spec-text-primary, #0f0f0f);
         font: inherit;
         box-sizing: border-box;
+        height: 36px;
       }
-      .yaivs-send { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; border: none; background: #ffffff; color: #111; font-size: 16px; line-height: 1; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+
+      .yaivs-input:focus {
+        outline: 2px solid rgba(62, 166, 255, 0.5);
+        outline-offset: -1px;
+        border-color: transparent;
+      }
 
       .yaivs-style-menu {
         position: absolute;
         left: auto;
         right: 0;
-        top: 100%;
+        top: calc(100% + 4px);
         display: flex;
         flex-direction: column;
         gap: 4px;
