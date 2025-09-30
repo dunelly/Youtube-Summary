@@ -6,6 +6,7 @@ const summaryModeSelect = document.getElementById('summaryMode');
 const customPromptContainer = document.getElementById('customPromptContainer');
 const customPromptTextarea = document.getElementById('customPrompt');
 const includeTimestampsToggle = document.getElementById('includeTimestamps');
+const outputLanguageSelect = document.getElementById('outputLanguage');
 // Usage and premium elements
 const usageDisplay = document.getElementById('usageDisplay');
 const premiumSection = document.getElementById('premiumSection');
@@ -49,6 +50,7 @@ async function load() {
       'summaryMode',
       'customPrompt',
       'includeTimestamps',
+      'outputLanguage',
       'summaryCount',
       'isPremium',
       'premiumCode',
@@ -90,6 +92,14 @@ async function load() {
     // Timestamps preference
     if (includeTimestampsToggle) {
       includeTimestampsToggle.checked = stored.includeTimestamps !== false;
+    }
+
+    // Output language
+    if (outputLanguageSelect) {
+      const language = (stored.outputLanguage || 'English').toString();
+      // Fallback to English if the stored value is not in the list
+      const options = Array.from(outputLanguageSelect.options).map(o => o.value);
+      outputLanguageSelect.value = options.includes(language) ? language : 'English';
     }
 
     // Ensure we have persistent access to youtube.com (requests once, then persists).
@@ -272,6 +282,16 @@ if (includeTimestampsToggle) {
     chrome.storage.sync
       .set({ includeTimestamps: value })
       .catch(error => console.error('[YAIVS] Failed to save includeTimestamps', error));
+  });
+}
+
+// Output language persistence
+if (outputLanguageSelect) {
+  outputLanguageSelect.addEventListener('change', () => {
+    const value = outputLanguageSelect.value;
+    chrome.storage.sync
+      .set({ outputLanguage: value })
+      .catch(error => console.error('[YAIVS] Failed to save outputLanguage', error));
   });
 }
 

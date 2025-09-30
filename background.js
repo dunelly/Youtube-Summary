@@ -187,14 +187,14 @@ chrome.runtime.onStartup?.addListener?.(() => {
 });
 
 async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, summaryMode, customPrompt, includeTimestamps, overrideModel }) {
-  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel', 'summaryMode', 'customPrompt', 'includeTimestamps']);
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel', 'summaryMode', 'customPrompt', 'includeTimestamps', 'outputLanguage']);
   const selectedMode = typeof summaryMode === 'string' ? summaryMode : settings.summaryMode;
   const storedCustom = typeof customPrompt === 'string' ? customPrompt : settings.customPrompt;
   const mode = ['bullets', 'detailed', 'chapters', 'proscons', 'recipe', 'outline', 'custom'].includes(selectedMode) ? selectedMode : 'bullets';
   const custom = (storedCustom || '').toString().trim();
   const effectiveMode = mode === 'custom' && !custom ? 'bullets' : mode;
   const useTimestamps = includeTimestamps !== false && settings.includeTimestamps !== false;
-  const prompt = buildPromptInstructions(effectiveMode, durationSeconds, custom, useTimestamps);
+  const prompt = buildPromptInstructions(effectiveMode, durationSeconds, custom, useTimestamps, settings.outputLanguage || 'English');
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
 
   // Use overrideModel if provided (for speed testing), otherwise use saved model
@@ -214,10 +214,12 @@ async function summarizeVideo({ provider = DEFAULT_PROVIDER, transcript, duratio
   }
 }
 
-function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTimestamps = true) {
+function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTimestamps = true, outputLanguage = 'English') {
   const total = Number(durationSeconds) || 0;
   const timeHints = buildTimeHints(total);
   const sharedGeneral = [
+    `Write all output in ${outputLanguage}.`,
+    'Use this language for all headings, bullets, and section labels.',
     'Summarize this YouTube video for a time-pressed viewer. Return plain text only (no tables).',
     'Be factual and neutral; do not mention the presenter or say "the reviewer".'
   ];
@@ -246,7 +248,7 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTim
   if (mode === 'proscons') {
     const lines = [
       ...sharedGeneral,
-      'Organize as two sections: "👍 Pros" and "👎 Cons". Under each, provide 3–6 concise bullets with timestamps where relevant. End with an "👉 Takeaway".',
+      `Organize as two sections: 👍 Pros and 👎 Cons — translate these section titles into ${outputLanguage}. Under each, provide 3–6 concise bullets with timestamps where relevant. End with a concluding Takeaway section titled in ${outputLanguage}.`,
       includeTimestamps ? timeHints : ''
     ];
     return lines.filter(Boolean).join('\n');
@@ -255,7 +257,7 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTim
   if (mode === 'recipe') {
     const lines = [
       ...sharedGeneral,
-      'Format as a recipe: Title, Ingredients (bulleted list), then Steps (numbered with concise instructions). Include timestamps for each step if applicable. Keep it factual and concise.',
+      `Format as a recipe: Use a localized title, an Ingredients section, then Steps — translate these section titles into ${outputLanguage}. Include timestamps for each step if applicable. Keep it factual and concise.`,
       includeTimestamps ? timeHints : ''
     ];
     return lines.filter(Boolean).join('\n');
@@ -290,7 +292,7 @@ function buildPromptInstructions(mode, durationSeconds, customPrompt, includeTim
     'Do not invent or include irrelevant categories. Never add empty or "N/A" sections.',
     'Under each heading produce 2–4 factual bullets. Each bullet must start with a single tab character followed by "• " (example: "\t• Brighter 3,000-nit display.").',
     'Keep bullets under ~18 words.',
-    'Finish with an "👉 Takeaway" section summarizing the key conclusion.',
+    `Finish with a concluding Takeaway section (title localized to ${outputLanguage}) summarizing the key conclusion.`,
     'Call out uncertainties or missing transcript portions inside the affected section/bullet.',
     includeTimestamps ? timeHints : '',
     'Do not append questions or calls-to-action after the "👉 Takeaway" section.'
@@ -319,8 +321,8 @@ function buildTimeHints(total) {
 }
 
 async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSeconds = 0, question, includeTimestamps }) {
-  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel']);
-  const prompt = buildQuestionPrompt(question, durationSeconds, includeTimestamps !== false);
+  const settings = await chrome.storage.sync.get(['geminiKey', 'openaiKey', 'claudeKey', 'openrouterKey', 'openrouterModel', 'ollamaUrl', 'ollamaModel', 'outputLanguage']);
+  const prompt = buildQuestionPrompt(question, durationSeconds, includeTimestamps !== false, settings.outputLanguage || 'English');
   const userText = [prompt, '', 'Transcript:', transcript].join('\n');
 
   switch (provider) {
@@ -337,11 +339,12 @@ async function askVideo({ provider = DEFAULT_PROVIDER, transcript, durationSecon
   }
 }
 
-function buildQuestionPrompt(question, durationSeconds, includeTimestamps = true) {
+function buildQuestionPrompt(question, durationSeconds, includeTimestamps = true, outputLanguage = 'English') {
   const q = (question || '').toString().trim();
   const total = Number(durationSeconds) || 0;
   const timeHint = includeTimestamps && total > 0 ? 'Include timestamps in [mm:ss] or [hh:mm:ss] when citing specific moments.' : 'Do not include timestamps when answering.';
   const lines = [
+    `Write all output in ${outputLanguage}.`,
     'You are answering a user question using ONLY the YouTube video transcript provided below.',
     `Question: ${q}`,
     'Give a clear, concise answer grounded in the transcript. If not answerable, say "Not found in transcript.".',
